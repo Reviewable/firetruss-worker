@@ -1,0 +1,26 @@
+{
+  "name": "firetruss-worker",
+  "version": "0.3.0",
+  "homepage": "https://github.com/pkaminski/firetruss-worker",
+  "authors": [
+    "Piotr Kaminski"
+  ],
+  "description": "Web worker component for pkaminski/firetruss",
+  "keywords": [
+    "firebase",
+    "vuejs",
+    "model",
+    "worker",
+    "angular"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components"
+  ],
+  "main": "dist/worker.umd.js",
+  "dependencies": {
+    "firebase": "2.x"
+  }
+}

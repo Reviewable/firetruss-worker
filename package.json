@@ -1,0 +1,63 @@
+{
+  "name": "firetruss-worker",
+  "version": "0.3.0",
+  "description": "Web worker component for pkaminski/firetruss",
+  "scripts": {
+    "setup": "rm -rf bower_components; rm -rf node_modules; npm install; bower install;",
+    "test": "node node_modules/ava/cli.js --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:pkaminski/firetruss-worker.git"
+  },
+  "keywords": [
+    "firebase",
+    "vuejs",
+    "model",
+    "worker",
+    "angular"
+  ],
+  "author": "Piotr Kaminski",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pkaminski/firetruss/issues"
+  },
+  "homepage": "https://github.com/pkaminski/firetruss",
+  "devDependencies": {
+    "ava": "^0.17.0",
+    "compose-source-map": "^1.0.0",
+    "grunt": "^1.0.0",
+    "grunt-contrib-clean": "^1.0.0",
+    "grunt-contrib-uglify": "^2.0.0",
+    "grunt-git": "^1.0.1",
+    "grunt-release": "^0.14.0",
+    "grunt-rollup": "^1.0.1",
+    "grunt-text-replace": "^0.4.0",
+    "load-grunt-tasks": "^3.5.2",
+    "rollup-plugin-buble": "^0.15.0",
+    "rollup-plugin-commonjs": "^5.0.5",
+    "rollup-plugin-node-resolve": "^2.0.0",
+    "testdouble": "^1.10.2"
+  },
+  "ava": {
+    "files": [
+      "src/*.test.js"
+    ],
+    "source": [
+      "src/*.js"
+    ],
+    "require": [
+      "babel-register"
+    ]
+  },
+  "babel": {
+    "presets": [
+      "es2015"
+    ]
+  },
+  "main": "dist/worker.umd.js",
+  "module": "dist/worker.es2015.js",
+  "dependencies": {
+    "firebase": "2.x"
+  }
+}
