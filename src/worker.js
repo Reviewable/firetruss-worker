@@ -1,4 +1,4 @@
-/* globals Firebase, setImmediate, setInterval */
+/* globals Firebase, setInterval */
 
 const fireworkers = [];
 let simulationQueue = Promise.resolve(), consoleIntercepted = false, simulationConsoleLogs;
@@ -22,7 +22,7 @@ class LocalStorage {
   }
 
   _update(item) {
-    if (!this._pendingItems.length) setImmediate(this._flushPending);
+    if (!this._pendingItems.length) Promise.resolve().then(this._flushPending);
     this._pendingItems.push(item);
   }
 
@@ -203,7 +203,7 @@ export default class Fireworker {
   }
 
   _send(message) {
-    if (!this._messages.length) setImmediate(this._flushMessageQueue);
+    if (!this._messages.length) Promise.resolve().then(this._flushMessageQueue);
     this._messages.push(message);
   }
 
