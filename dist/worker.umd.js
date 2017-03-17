@@ -4,7 +4,7 @@
   (global.Fireworker = factory());
 }(this, (function () { 'use strict';
 
-  /* globals Firebase, setImmediate, setInterval */
+  /* globals Firebase, setInterval */
 
   var fireworkers = [];
   var simulationQueue = Promise.resolve();
@@ -31,7 +31,7 @@
   };
 
   LocalStorage.prototype._update = function _update (item) {
-    if (!this._pendingItems.length) { setImmediate(this._flushPending); }
+    if (!this._pendingItems.length) { Promise.resolve().then(this._flushPending); }
     this._pendingItems.push(item);
   };
 
@@ -229,7 +229,6 @@
       promise = Promise.reject(e);
     }
     if (!message.oneWay) {
-      this._send({msg: 'acknowledge', id: message.id});
       promise.then(function (result) {
         this$1._send({msg: 'resolve', id: message.id, result: result});
       }, function (error) {
@@ -239,7 +238,7 @@
   };
 
   Fireworker.prototype._send = function _send (message) {
-    if (!this._messages.length) { setImmediate(this._flushMessageQueue); }
+    if (!this._messages.length) { Promise.resolve().then(this._flushMessageQueue); }
     this._messages.push(message);
   };
 
@@ -321,7 +320,6 @@
     snapshotCallback.cancel = this.off.bind(this, {listenerKey: listenerKey, url: url, spec: spec, eventType: eventType, callbackId: callbackId});
     var cancelCallback = this._onCancelCallback.bind(this, callbackId);
     createRef(url, spec).on(eventType, snapshotCallback, cancelCallback);
-    if (options.sync) { options.omitValue = true; }
   };
 
   Fireworker.prototype.off = function off (ref) {
@@ -432,19 +430,15 @@
   Fireworker.prototype._snapshotToJson = function _snapshotToJson (snapshot, options) {
     var path =
       decodeURIComponent(snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
-    if (options && options.omitValue) {
-      return {path: path, exists: snapshot.exists(), writeSerial: this._lastWriteSerial};
-    } else {
-      try {
-        return {
-          path: path, value: normalizeFirebaseValue(snapshot.val()), writeSerial: this._lastWriteSerial
-        };
-      } catch (e) {
-        return {
-          path: path, exists: snapshot.exists(), valueError: errorToJson(e),
-          writeSerial: this._lastWriteSerial
-        };
-      }
+    try {
+      return {
+        path: path, value: normalizeFirebaseValue(snapshot.val()), writeSerial: this._lastWriteSerial
+      };
+    } catch (e) {
+      return {
+        path: path, exists: snapshot.exists(), valueError: errorToJson(e),
+        writeSerial: this._lastWriteSerial
+      };
     }
   };
 

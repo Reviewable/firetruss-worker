@@ -193,7 +193,6 @@ export default class Fireworker {
       promise = Promise.reject(e);
     }
     if (!message.oneWay) {
-      this._send({msg: 'acknowledge', id: message.id});
       promise.then(result => {
         this._send({msg: 'resolve', id: message.id, result: result});
       }, error => {
@@ -260,7 +259,6 @@ export default class Fireworker {
     snapshotCallback.cancel = this.off.bind(this, {listenerKey, url, spec, eventType, callbackId});
     const cancelCallback = this._onCancelCallback.bind(this, callbackId);
     createRef(url, spec).on(eventType, snapshotCallback, cancelCallback);
-    if (options.sync) options.omitValue = true;
   }
 
   off({listenerKey, url, spec, eventType, callbackId}) {
@@ -356,19 +354,15 @@ export default class Fireworker {
   _snapshotToJson(snapshot, options) {
     const path =
       decodeURIComponent(snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
-    if (options && options.omitValue) {
-      return {path, exists: snapshot.exists(), writeSerial: this._lastWriteSerial};
-    } else {
-      try {
-        return {
-          path, value: normalizeFirebaseValue(snapshot.val()), writeSerial: this._lastWriteSerial
-        };
-      } catch (e) {
-        return {
-          path, exists: snapshot.exists(), valueError: errorToJson(e),
-          writeSerial: this._lastWriteSerial
-        };
-      }
+    try {
+      return {
+        path, value: normalizeFirebaseValue(snapshot.val()), writeSerial: this._lastWriteSerial
+      };
+    } catch (e) {
+      return {
+        path, exists: snapshot.exists(), valueError: errorToJson(e),
+        writeSerial: this._lastWriteSerial
+      };
     }
   }
 
