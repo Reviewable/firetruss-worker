@@ -294,7 +294,7 @@ export default class Fireworker {
           args: [null, {path, exists: snapshot.exists(), valueError: errorToJson(e)}]
         });
       }
-      const updates = this.options.branch.diff(value, path);
+      const updates = options.branch.diff(value, path);
       for (let childPath in updates) {
         if (!updates.hasOwnProperty(childPath)) continue;
         this._send({

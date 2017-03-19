@@ -360,7 +360,7 @@ Fireworker.prototype._onSnapshotCallback = function _onSnapshotCallback (callbac
         args: [null, {path: path, exists: snapshot.exists(), valueError: errorToJson(e)}]
       });
     }
-    var updates = this.options.branch.diff(value, path);
+    var updates = options.branch.diff(value, path);
     for (var childPath in updates) {
       if (!updates.hasOwnProperty(childPath)) { continue; }
       this$1._send({
