@@ -57,8 +57,5 @@
     ]
   },
   "main": "dist/worker.umd.js",
-  "module": "dist/worker.es2015.js",
-  "dependencies": {
-    "firebase": "2.x"
-  }
+  "module": "dist/worker.es2015.js"
 }

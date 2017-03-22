@@ -19,8 +19,5 @@
     "node_modules",
     "bower_components"
   ],
-  "main": "dist/worker.umd.js",
-  "dependencies": {
-    "firebase": "2.x"
-  }
+  "main": "dist/worker.umd.js"
 }
