@@ -25,6 +25,7 @@
 
   LocalStorage.prototype.init = function init (items) {
     if (!this._initialized) {
+      console.log('init', items);
       this._items = items;
       this._initialized = true;
     }
@@ -36,7 +37,11 @@
   };
 
   LocalStorage.prototype.flushPending = function flushPending () {
-    if (!fireworkers.length) { return; }
+    if (!this._pendingItems.length) { return; }
+    if (!fireworkers.length) {
+      setTimeout(this._flushPending, 200);
+      return;
+    }
     fireworkers[0]._send({msg: 'updateLocalStorage', items: this._pendingItems});
     this._pendingItems = [];
   };
@@ -219,6 +224,7 @@
   Fireworker.prototype._receiveMessage = function _receiveMessage (message) {
       var this$1 = this;
 
+    console.log('receive', message);
     var promise;
     try {
       var fn = this[message.msg];

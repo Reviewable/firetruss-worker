@@ -1,4 +1,4 @@
-/* globals Firebase, setInterval */
+/* globals Firebase, setTimeout, setInterval */
 
 const fireworkers = [];
 let simulationQueue = Promise.resolve(), consoleIntercepted = false, simulationConsoleLogs;
@@ -27,7 +27,11 @@ class LocalStorage {
   }
 
   flushPending() {
-    if (!fireworkers.length) return;
+    if (!this._pendingItems.length) return;
+    if (!fireworkers.length) {
+      setTimeout(this._flushPending, 200);
+      return;
+    }
     fireworkers[0]._send({msg: 'updateLocalStorage', items: this._pendingItems});
     this._pendingItems = [];
   }
