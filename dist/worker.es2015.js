@@ -1,4 +1,4 @@
-/* globals Firebase, setInterval */
+/* globals Firebase, setTimeout, setInterval */
 
 var fireworkers = [];
 var simulationQueue = Promise.resolve();
@@ -19,7 +19,6 @@ var prototypeAccessors = { length: {} };
 
 LocalStorage.prototype.init = function init (items) {
   if (!this._initialized) {
-    console.log('init', items);
     this._items = items;
     this._initialized = true;
   }
@@ -218,7 +217,6 @@ Fireworker.prototype._receive = function _receive (event) {
 Fireworker.prototype._receiveMessage = function _receiveMessage (message) {
     var this$1 = this;
 
-  console.log('receive', message);
   var promise;
   try {
     var fn = this[message.msg];
@@ -363,19 +361,25 @@ Fireworker.prototype._onSnapshotCallback = function _onSnapshotCallback (callbac
       options.branch.set(null);
       this._send({
         msg: 'callback', id: callbackId,
-        args: [null, {path: path, exists: snapshot.exists(), valueError: errorToJson(e)}]
+        args: [null, {
+          path: path, exists: snapshot.exists(), valueError: errorToJson(e),
+          writeSerial: this._lastWriteSerial
+        }]
       });
+      return;
     }
     var updates = options.branch.diff(value, path);
     for (var childPath in updates) {
       if (!updates.hasOwnProperty(childPath)) { continue; }
       this$1._send({
         msg: 'callback', id: callbackId,
-        args: [null, {path: childPath, value: updates[childPath]}]
+        args: [null, {
+          path: childPath, value: updates[childPath], writeSerial: this$1._lastWriteSerial
+        }]
       });
     }
   } else {
-    var snapshotJson = this._snapshotToJson(snapshot, options);
+    var snapshotJson = this._snapshotToJson(snapshot);
     if (options.sync) { options.branch.set(snapshotJson.value); }
     this._send({msg: 'callback', id: callbackId, args: [null, snapshotJson]});
     options.rest = true;
@@ -388,15 +392,16 @@ Fireworker.prototype._onCancelCallback = function _onCancelCallback (callbackId,
 };
 
 Fireworker.prototype.transaction = function transaction (ref$1) {
+    var this$1 = this;
     var url = ref$1.url;
     var oldValue = ref$1.oldValue;
     var relativeUpdates = ref$1.relativeUpdates;
 
   var ref = createRef(url);
-  var stale;
+  var stale, currentValue;
 
   return ref.transaction(function (value) {
-    value = normalizeFirebaseValue(value);
+    currentValue = value = normalizeFirebaseValue(value);
     stale = !areEqualNormalFirebaseValues(value, oldValue);
     if (stale) { return; }
     if (relativeUpdates) {
@@ -420,14 +425,14 @@ Fireworker.prototype.transaction = function transaction (ref$1) {
     }
     return value;
   }).then(function (result) {
-    return !stale;
+    return {committed: !stale, snapshot: this$1._snapshotToJson(result.snapshot)};
   }, function (error) {
     if (error.message === 'set' || error.message === 'disconnect') { return false; }
     return Promise.reject(error);
   });
 };
 
-Fireworker.prototype._snapshotToJson = function _snapshotToJson (snapshot, options) {
+Fireworker.prototype._snapshotToJson = function _snapshotToJson (snapshot) {
   var path =
     decodeURIComponent(snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
   try {
@@ -583,6 +588,8 @@ function normalizeFirebaseValue(value) {
 
 function areEqualNormalFirebaseValues(a, b) {
   if (a === b) { return true; }
+  if ((a === null || a === undefined) && (b === null || b === undefined)) { return true; }
+  if (a === null || b === null) { return false; }
   if (!(typeof a === 'object' && typeof b === 'object')) { return false; }
   for (var key in a) {
     if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) { return false; }

@@ -295,19 +295,25 @@ export default class Fireworker {
         options.branch.set(null);
         this._send({
           msg: 'callback', id: callbackId,
-          args: [null, {path, exists: snapshot.exists(), valueError: errorToJson(e)}]
+          args: [null, {
+            path, exists: snapshot.exists(), valueError: errorToJson(e),
+            writeSerial: this._lastWriteSerial
+          }]
         });
+        return;
       }
       const updates = options.branch.diff(value, path);
       for (let childPath in updates) {
         if (!updates.hasOwnProperty(childPath)) continue;
         this._send({
           msg: 'callback', id: callbackId,
-          args: [null, {path: childPath, value: updates[childPath]}]
+          args: [null, {
+            path: childPath, value: updates[childPath], writeSerial: this._lastWriteSerial
+          }]
         });
       }
     } else {
-      const snapshotJson = this._snapshotToJson(snapshot, options);
+      const snapshotJson = this._snapshotToJson(snapshot);
       if (options.sync) options.branch.set(snapshotJson.value);
       this._send({msg: 'callback', id: callbackId, args: [null, snapshotJson]});
       options.rest = true;
@@ -321,10 +327,10 @@ export default class Fireworker {
 
   transaction({url, oldValue, relativeUpdates}) {
     const ref = createRef(url);
-    let stale;
+    let stale, currentValue;
 
     return ref.transaction(value => {
-      value = normalizeFirebaseValue(value);
+      currentValue = value = normalizeFirebaseValue(value);
       stale = !areEqualNormalFirebaseValues(value, oldValue);
       if (stale) return;
       if (relativeUpdates) {
@@ -348,14 +354,14 @@ export default class Fireworker {
       }
       return value;
     }).then(result => {
-      return !stale;
+      return {committed: !stale, snapshot: this._snapshotToJson(result.snapshot)};
     }, error => {
       if (error.message === 'set' || error.message === 'disconnect') return false;
       return Promise.reject(error);
     });
   }
 
-  _snapshotToJson(snapshot, options) {
+  _snapshotToJson(snapshot) {
     const path =
       decodeURIComponent(snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
     try {
@@ -501,6 +507,8 @@ function normalizeFirebaseValue(value) {
 
 function areEqualNormalFirebaseValues(a, b) {
   if (a === b) return true;
+  if ((a === null || a === undefined) && (b === null || b === undefined)) return true;
+  if (a === null || b === null) return false;
   if (!(typeof a === 'object' && typeof b === 'object')) return false;
   for (let key in a) {
     if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
