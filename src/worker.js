@@ -191,7 +191,9 @@ export default class Fireworker {
     try {
       const fn = this[message.msg];
       if (typeof fn !== 'function') throw new Error('Unknown message: ' + message.msg);
-      if (message.writeSerial) this._lastWriteSerial = message.writeSerial;
+      if (message.writeSerial) {
+        this._lastWriteSerial = Math.max(this._lastWriteSerial, message.writeSerial);
+      }
       promise = Promise.resolve(fn.call(this, message));
     } catch(e) {
       promise = Promise.reject(e);
@@ -326,13 +328,15 @@ export default class Fireworker {
   }
 
   transaction({url, oldValue, relativeUpdates}) {
+    const transactionPath = decodeURIComponent(url.replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
     const ref = createRef(url);
-    let stale, currentValue;
+    const branch = new Branch();
+    let stale;
 
     return ref.transaction(value => {
-      currentValue = value = normalizeFirebaseValue(value);
+      value = normalizeFirebaseValue(value);
       stale = !areEqualNormalFirebaseValues(value, oldValue);
-      if (stale) return;
+      if (stale) value = oldValue;
       if (relativeUpdates) {
         for (let relativePath in relativeUpdates) {
           if (!relativeUpdates.hasOwnProperty(relativePath)) continue;
@@ -352,12 +356,25 @@ export default class Fireworker {
           }
         }
       }
-      return value;
-    }).then(result => {
-      return {committed: !stale, snapshot: this._snapshotToJson(result.snapshot)};
-    }, error => {
-      if (error.message === 'set' || error.message === 'disconnect') return false;
+      branch.set(value);
+      if (!stale) return value;
+    }).catch(error => {
+      if (error.message === 'set' || error.message === 'disconnect') {
+        return ref.once('value').then(snapshot => {
+          return {committed: false, snapshot, writeSerial: this._lastWriteSerial};
+        });
+      }
       return Promise.reject(error);
+    }).then(result => {
+      const snapshots = [];
+      const updates = branch.diff(normalizeFirebaseValue(result.snapshot.val()), transactionPath);
+      for (let path in updates) {
+        if (!updates.hasOwnProperty(path)) continue;
+        snapshots.push({
+          path, value: updates[path], writeSerial: result.writeSerial || this._lastWriteSerial
+        });
+      }
+      return {committed: !stale, snapshots};
     });
   }
 

@@ -221,7 +221,9 @@ Fireworker.prototype._receiveMessage = function _receiveMessage (message) {
   try {
     var fn = this[message.msg];
     if (typeof fn !== 'function') { throw new Error('Unknown message: ' + message.msg); }
-    if (message.writeSerial) { this._lastWriteSerial = message.writeSerial; }
+    if (message.writeSerial) {
+      this._lastWriteSerial = Math.max(this._lastWriteSerial, message.writeSerial);
+    }
     promise = Promise.resolve(fn.call(this, message));
   } catch(e) {
     promise = Promise.reject(e);
@@ -397,13 +399,15 @@ Fireworker.prototype.transaction = function transaction (ref$1) {
     var oldValue = ref$1.oldValue;
     var relativeUpdates = ref$1.relativeUpdates;
 
+  var transactionPath = decodeURIComponent(url.replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
   var ref = createRef(url);
-  var stale, currentValue;
+  var branch = new Branch();
+  var stale;
 
   return ref.transaction(function (value) {
-    currentValue = value = normalizeFirebaseValue(value);
+    value = normalizeFirebaseValue(value);
     stale = !areEqualNormalFirebaseValues(value, oldValue);
-    if (stale) { return; }
+    if (stale) { value = oldValue; }
     if (relativeUpdates) {
       for (var relativePath in relativeUpdates) {
         if (!relativeUpdates.hasOwnProperty(relativePath)) { continue; }
@@ -423,12 +427,25 @@ Fireworker.prototype.transaction = function transaction (ref$1) {
         }
       }
     }
-    return value;
-  }).then(function (result) {
-    return {committed: !stale, snapshot: this$1._snapshotToJson(result.snapshot)};
-  }, function (error) {
-    if (error.message === 'set' || error.message === 'disconnect') { return false; }
+    branch.set(value);
+    if (!stale) { return value; }
+  }).catch(function (error) {
+    if (error.message === 'set' || error.message === 'disconnect') {
+      return ref.once('value').then(function (snapshot) {
+        return {committed: false, snapshot: snapshot, writeSerial: this$1._lastWriteSerial};
+      });
+    }
     return Promise.reject(error);
+  }).then(function (result) {
+    var snapshots = [];
+    var updates = branch.diff(normalizeFirebaseValue(result.snapshot.val()), transactionPath);
+    for (var path in updates) {
+      if (!updates.hasOwnProperty(path)) { continue; }
+      snapshots.push({
+        path: path, value: updates[path], writeSerial: result.writeSerial || this$1._lastWriteSerial
+      });
+    }
+    return {committed: !stale, snapshots: snapshots};
   });
 };
 
