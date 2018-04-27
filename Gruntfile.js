@@ -1,4 +1,4 @@
-// jshint node:true
+/* eslint-env node */
 'use strict';
 
 const buble = require('rollup-plugin-buble');
@@ -23,8 +23,17 @@ module.exports = function(grunt) {
         overwrite: true,
         replacements: [{
           from: /const VERSION = '.*?';/,
-          to: () => `const VERSION = '${grunt.config('ext.version')}';`
+          to: () => `const VERSION = '${grunt.option('release')}';`
         }]
+      }
+    },
+
+    eslint: {
+      all: {
+        options: {
+          maxWarnings: 0
+        },
+        src: ['src/**/*.js'],
       }
     },
 
@@ -98,8 +107,7 @@ module.exports = function(grunt) {
     release: {
       options: {
         additionalFiles: ['bower.json'],
-        updateVars: 'ext',
-        afterBump: ['replace'],
+        afterBump: ['replace --release=<%= version %>'],
         beforeRelease: ['default']
       }
     }
@@ -107,7 +115,7 @@ module.exports = function(grunt) {
   });
 
   grunt.registerTask('default', [
-    'clean:dist', 'rollup', 'uglify', 'gitadd'
+    'eslint', 'clean:dist', 'rollup', 'uglify', 'gitadd'
   ]);
 
 };

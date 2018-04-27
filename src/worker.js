@@ -43,7 +43,7 @@ class LocalStorage {
   }
 
   getItem(key) {
-    for (let item of this._items) {
+    for (const item of this._items) {
       if (item.key === key) return item.value;
     }
     return null;
@@ -51,7 +51,7 @@ class LocalStorage {
 
   setItem(key, value) {
     let targetItem;
-    for (let item of this._items) {
+    for (const item of this._items) {
       if (item.key === key) {
         targetItem = item;
         item.value = value;
@@ -76,7 +76,7 @@ class LocalStorage {
   }
 
   clear() {
-    for (let item in this._items) {
+    for (const item in this._items) {
       this._update({key: item.key, value: null});
     }
     this._items = [];
@@ -112,22 +112,23 @@ class Branch {
     if (oldValue instanceof Object && newValue instanceof Object) {
       let replace = true;
       const keysToReplace = [];
-      for (let childKey in newValue) {
+      for (const childKey in newValue) {
         if (!newValue.hasOwnProperty(childKey)) continue;
-        if (this._diffRecursively(
-            oldValue[childKey], newValue[childKey], segments.concat(childKey), updates)) {
+        const replaceChild = this._diffRecursively(
+          oldValue[childKey], newValue[childKey], segments.concat(childKey), updates);
+        if (replaceChild) {
           keysToReplace.push(childKey);
         } else {
           replace = false;
         }
       }
       if (replace) return true;
-      for (let childKey in oldValue) {
+      for (const childKey in oldValue) {
         if (!oldValue.hasOwnProperty(childKey) || newValue.hasOwnProperty(childKey)) continue;
         updates[segments.concat(childKey).join('/')] = null;
         delete oldValue[childKey];
       }
-      for (let childKey of keysToReplace) {
+      for (const childKey of keysToReplace) {
         updates[segments.concat(childKey).join('/')] = newValue[childKey];
         oldValue[childKey] = newValue[childKey];
       }
@@ -160,7 +161,7 @@ export default class Fireworker {
   }
 
   destroy() {
-    for (let key in this._callbacks) {
+    for (const key in this._callbacks) {
       const callback = this._callbacks[key];
       if (callback.cancel) callback.cancel();
     }
@@ -183,7 +184,7 @@ export default class Fireworker {
   _receive(event) {
     Fireworker._firstMessageReceived = true;
     this.lastTouched = Date.now();
-    for (let message of event.data) this._receiveMessage(message);
+    for (const message of event.data) this._receiveMessage(message);
   }
 
   _receiveMessage(message) {
@@ -195,12 +196,12 @@ export default class Fireworker {
         this._lastWriteSerial = Math.max(this._lastWriteSerial, message.writeSerial);
       }
       promise = Promise.resolve(fn.call(this, message));
-    } catch(e) {
+    } catch (e) {
       promise = Promise.reject(e);
     }
     if (!message.oneWay) {
       promise.then(result => {
-        this._send({msg: 'resolve', id: message.id, result: result});
+        this._send({msg: 'resolve', id: message.id, result});
       }, error => {
         this._send({msg: 'reject', id: message.id, error: errorToJson(error)});
       });
@@ -275,7 +276,7 @@ export default class Fireworker {
       snapshotCallback = this._callbacks[callbackId];
       delete this._callbacks[callbackId];
     } else {
-      for (let key of Object.keys(this._callbacks)) {
+      for (const key of Object.keys(this._callbacks)) {
         if (!this._callbacks.hasOwnProperty(key)) continue;
         const callback = this._callbacks[key];
         if (callback.listenerKey === listenerKey &&
@@ -300,7 +301,7 @@ export default class Fireworker {
         return;
       }
       const updates = options.branch.diff(value, path);
-      for (let childPath in updates) {
+      for (const childPath in updates) {
         if (!updates.hasOwnProperty(childPath)) continue;
         this._send({
           msg: 'callback', id: callbackId,
@@ -338,7 +339,7 @@ export default class Fireworker {
       stale = !areEqualNormalFirebaseValues(value, oldValue);
       if (stale) value = oldValue;
       if (relativeUpdates) {
-        for (let relativePath in relativeUpdates) {
+        for (const relativePath in relativeUpdates) {
           if (!relativeUpdates.hasOwnProperty(relativePath)) continue;
           if (relativePath) {
             const segments = relativePath.split('/');
@@ -368,7 +369,7 @@ export default class Fireworker {
     }).then(result => {
       const snapshots = [];
       const updates = branch.diff(normalizeFirebaseValue(result.snapshot.val()), transactionPath);
-      for (let path in updates) {
+      for (const path in updates) {
         if (!updates.hasOwnProperty(path)) continue;
         snapshots.push({
           path, value: updates[path], writeSerial: result.writeSerial || this._lastWriteSerial
@@ -388,17 +389,17 @@ export default class Fireworker {
 
   onDisconnect({url, method, value}) {
     const onDisconnect = createRef(url).onDisconnect();
-    return onDisconnect[method].call(onDisconnect, value);
+    return onDisconnect[method](value);
   }
 
   simulate({token, method, url, args}) {
     interceptConsoleLog();
     let simulatedFirebase;
-    return (simulationQueue = simulationQueue.catch(() => {}).then(() => {
+    return (simulationQueue = simulationQueue.catch(() => {/* ignore */}).then(() => {
       simulationConsoleLogs = [];
       simulatedFirebase = createRef(url, null, 'permission_denied_simulator');
       simulatedFirebase.unauth();
-      return simulatedFirebase.authWithCustomToken(token, function() {}, {remember: 'none'});
+      return simulatedFirebase.authWithCustomToken(token, () => {/* ignore */}, {remember: 'none'});
     }).then(() => {
       return simulatedFirebase[method].apply(simulatedFirebase, args);
     }).then(() => {
@@ -407,9 +408,8 @@ export default class Fireworker {
       const code = e.code || e.message;
       if (code && code.toLowerCase() === 'permission_denied') {
         return simulationConsoleLogs.join('\n');
-      } else {
-        return 'Got a different error in simulation: ' + e;
       }
+      return 'Got a different error in simulation: ' + e;
     }));
   }
 
@@ -468,7 +468,7 @@ function interceptConsoleLog() {
 function errorToJson(error) {
   const json = {name: error.name};
   const propertyNames = Object.getOwnPropertyNames(error);
-  for (let propertyName of propertyNames) {
+  for (const propertyName of propertyNames) {
     json[propertyName] = error[propertyName];
   }
   return json;
@@ -507,7 +507,7 @@ function normalizeFirebaseValue(value) {
     return normalValue;
   }
   if (value instanceof Object) {
-    for (let key in value) {
+    for (const key in value) {
       if (value.hasOwnProperty(key)) value[key] = normalizeFirebaseValue(value[key]);
     }
   }
@@ -520,11 +520,11 @@ function areEqualNormalFirebaseValues(a, b) {
   if ((a === null || a === undefined) && (b === null || b === undefined)) return true;
   if (a === null || b === null) return false;
   if (!(typeof a === 'object' && typeof b === 'object')) return false;
-  for (let key in a) {
+  for (const key in a) {
     if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
     if (!areEqualNormalFirebaseValues(a[key], b[key])) return false;
   }
-  for (let key in b) {
+  for (const key in b) {
     if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
   }
   return true;

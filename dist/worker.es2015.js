@@ -131,8 +131,9 @@ Branch.prototype._diffRecursively = function _diffRecursively (oldValue, newValu
     var keysToReplace = [];
     for (var childKey in newValue) {
       if (!newValue.hasOwnProperty(childKey)) { continue; }
-      if (this$1._diffRecursively(
-          oldValue[childKey], newValue[childKey], segments.concat(childKey), updates)) {
+      var replaceChild = this$1._diffRecursively(
+        oldValue[childKey], newValue[childKey], segments.concat(childKey), updates);
+      if (replaceChild) {
         keysToReplace.push(childKey);
       } else {
         replace = false;
@@ -225,7 +226,7 @@ Fireworker.prototype._receiveMessage = function _receiveMessage (message) {
       this._lastWriteSerial = Math.max(this._lastWriteSerial, message.writeSerial);
     }
     promise = Promise.resolve(fn.call(this, message));
-  } catch(e) {
+  } catch (e) {
     promise = Promise.reject(e);
   }
   if (!message.oneWay) {
@@ -463,7 +464,7 @@ Fireworker.prototype.onDisconnect = function onDisconnect (ref) {
     var value = ref.value;
 
   var onDisconnect = createRef(url).onDisconnect();
-  return onDisconnect[method].call(onDisconnect, value);
+  return onDisconnect[method](value);
 };
 
 Fireworker.prototype.simulate = function simulate (ref) {
@@ -474,11 +475,11 @@ Fireworker.prototype.simulate = function simulate (ref) {
 
   interceptConsoleLog();
   var simulatedFirebase;
-  return (simulationQueue = simulationQueue.catch(function () {}).then(function () {
+  return (simulationQueue = simulationQueue.catch(function () {/* ignore */}).then(function () {
     simulationConsoleLogs = [];
     simulatedFirebase = createRef(url, null, 'permission_denied_simulator');
     simulatedFirebase.unauth();
-    return simulatedFirebase.authWithCustomToken(token, function() {}, {remember: 'none'});
+    return simulatedFirebase.authWithCustomToken(token, function () {/* ignore */}, {remember: 'none'});
   }).then(function () {
     return simulatedFirebase[method].apply(simulatedFirebase, args);
   }).then(function () {
@@ -487,9 +488,8 @@ Fireworker.prototype.simulate = function simulate (ref) {
     var code = e.code || e.message;
     if (code && code.toLowerCase() === 'permission_denied') {
       return simulationConsoleLogs.join('\n');
-    } else {
-      return 'Got a different error in simulation: ' + e;
     }
+    return 'Got a different error in simulation: ' + e;
   }));
 };
 
