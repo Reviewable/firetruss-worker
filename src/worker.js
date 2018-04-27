@@ -258,11 +258,12 @@ export default class Fireworker {
   on({listenerKey, url, spec, eventType, callbackId, options}) {
     options = options || {};
     if (options.sync) options.branch = new Branch();
+    options.cancel = this.off.bind(this, {listenerKey, url, spec, eventType, callbackId});
     const snapshotCallback = this._callbacks[callbackId] =
       this._onSnapshotCallback.bind(this, callbackId, options);
     snapshotCallback.listenerKey = listenerKey;
     snapshotCallback.eventType = eventType;
-    snapshotCallback.cancel = this.off.bind(this, {listenerKey, url, spec, eventType, callbackId});
+    snapshotCallback.cancel = options.cancel;
     const cancelCallback = this._onCancelCallback.bind(this, callbackId);
     createRef(url, spec).on(eventType, snapshotCallback, cancelCallback);
   }
@@ -294,14 +295,8 @@ export default class Fireworker {
       try {
         value = normalizeFirebaseValue(snapshot.val());
       } catch (e) {
-        options.branch.set(null);
-        this._send({
-          msg: 'callback', id: callbackId,
-          args: [null, {
-            path, exists: snapshot.exists(), valueError: errorToJson(e),
-            writeSerial: this._lastWriteSerial
-          }]
-        });
+        options.cancel();
+        this._onCancelCallback(callbackId, e);
         return;
       }
       const updates = options.branch.diff(value, path);
@@ -315,10 +310,15 @@ export default class Fireworker {
         });
       }
     } else {
-      const snapshotJson = this._snapshotToJson(snapshot);
-      if (options.sync) options.branch.set(snapshotJson.value);
-      this._send({msg: 'callback', id: callbackId, args: [null, snapshotJson]});
-      options.rest = true;
+      try {
+        const snapshotJson = this._snapshotToJson(snapshot);
+        if (options.sync) options.branch.set(snapshotJson.value);
+        this._send({msg: 'callback', id: callbackId, args: [null, snapshotJson]});
+        options.rest = true;
+      } catch (e) {
+        options.cancel();
+        this._onCancelCallback(callbackId, e);
+      }
     }
   }
 
@@ -381,16 +381,9 @@ export default class Fireworker {
   _snapshotToJson(snapshot) {
     const path =
       decodeURIComponent(snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
-    try {
-      return {
-        path, value: normalizeFirebaseValue(snapshot.val()), writeSerial: this._lastWriteSerial
-      };
-    } catch (e) {
-      return {
-        path, exists: snapshot.exists(), valueError: errorToJson(e),
-        writeSerial: this._lastWriteSerial
-      };
-    }
+    return {
+      path, value: normalizeFirebaseValue(snapshot.val()), writeSerial: this._lastWriteSerial
+    };
   }
 
   onDisconnect({url, method, value}) {
