@@ -5,7 +5,7 @@ var simulationQueue = Promise.resolve();
 var consoleIntercepted = false;
 var simulationConsoleLogs;
 // This version is filled in by the build, don't reformat the line.
-var VERSION = 'dev';
+var VERSION = '0.7.0';
 
 
 var LocalStorage = function LocalStorage() {
