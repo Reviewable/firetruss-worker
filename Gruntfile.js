@@ -108,8 +108,13 @@ module.exports = function(grunt) {
       options: {
         additionalFiles: ['bower.json'],
         afterBump: ['replace --release=<%= version %>'],
-        beforeRelease: ['default']
+        beforeRelease: ['default'],
+        afterRelease: ['exec:reset']
       }
+    },
+
+    exec: {
+      reset: 'git reset --hard'
     }
 
   });
