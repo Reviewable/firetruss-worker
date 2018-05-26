@@ -197,6 +197,7 @@ export default class Fireworker {
       }
       promise = Promise.resolve(fn.call(this, message));
     } catch (e) {
+      e.immediateFailure = true;
       promise = Promise.reject(e);
     }
     if (!message.oneWay) {
@@ -254,6 +255,10 @@ export default class Fireworker {
 
   update({url, value}) {
     return createRef(url).update(value);
+  }
+
+  once({url}) {
+    return createRef(url).once('value').then(snapshot => this._snapshotToJson(snapshot));
   }
 
   on({listenerKey, url, spec, eventType, callbackId, options}) {
@@ -362,7 +367,7 @@ export default class Fireworker {
     }).catch(error => {
       if (error.message === 'set' || error.message === 'disconnect') {
         return ref.once('value').then(snapshot => {
-          return {committed: false, snapshot, writeSerial: this._lastWriteSerial};
+          return {committed: false, snapshots: [snapshot], writeSerial: this._lastWriteSerial};
         });
       }
       return Promise.reject(error);
@@ -392,12 +397,12 @@ export default class Fireworker {
     return onDisconnect[method](value);
   }
 
-  simulate({token, method, url, args}) {
+  simulate({token, method, url, spec, args}) {
     interceptConsoleLog();
     let simulatedFirebase;
     return (simulationQueue = simulationQueue.catch(() => {/* ignore */}).then(() => {
       simulationConsoleLogs = [];
-      simulatedFirebase = createRef(url, null, 'permission_denied_simulator');
+      simulatedFirebase = createRef(url, spec, 'permission_denied_simulator');
       simulatedFirebase.unauth();
       return simulatedFirebase.authWithCustomToken(token, () => {/* ignore */}, {remember: 'none'});
     }).then(() => {

@@ -5,7 +5,7 @@ var simulationQueue = Promise.resolve();
 var consoleIntercepted = false;
 var simulationConsoleLogs;
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '0.7.0';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -227,6 +227,7 @@ Fireworker.prototype._receiveMessage = function _receiveMessage (message) {
     }
     promise = Promise.resolve(fn.call(this, message));
   } catch (e) {
+    e.immediateFailure = true;
     promise = Promise.reject(e);
   }
   if (!message.oneWay) {
@@ -302,6 +303,13 @@ Fireworker.prototype.update = function update (ref) {
     var value = ref.value;
 
   return createRef(url).update(value);
+};
+
+Fireworker.prototype.once = function once (ref) {
+    var this$1 = this;
+    var url = ref.url;
+
+  return createRef(url).once('value').then(function (snapshot) { return this$1._snapshotToJson(snapshot); });
 };
 
 Fireworker.prototype.on = function on (ref) {
@@ -433,7 +441,7 @@ Fireworker.prototype.transaction = function transaction (ref$1) {
   }).catch(function (error) {
     if (error.message === 'set' || error.message === 'disconnect') {
       return ref.once('value').then(function (snapshot) {
-        return {committed: false, snapshot: snapshot, writeSerial: this$1._lastWriteSerial};
+        return {committed: false, snapshots: [snapshot], writeSerial: this$1._lastWriteSerial};
       });
     }
     return Promise.reject(error);
@@ -471,13 +479,14 @@ Fireworker.prototype.simulate = function simulate (ref) {
     var token = ref.token;
     var method = ref.method;
     var url = ref.url;
+    var spec = ref.spec;
     var args = ref.args;
 
   interceptConsoleLog();
   var simulatedFirebase;
   return (simulationQueue = simulationQueue.catch(function () {/* ignore */}).then(function () {
     simulationConsoleLogs = [];
-    simulatedFirebase = createRef(url, null, 'permission_denied_simulator');
+    simulatedFirebase = createRef(url, spec, 'permission_denied_simulator');
     simulatedFirebase.unauth();
     return simulatedFirebase.authWithCustomToken(token, function () {/* ignore */}, {remember: 'none'});
   }).then(function () {
