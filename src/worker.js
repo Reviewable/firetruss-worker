@@ -438,7 +438,7 @@ Fireworker._firstMessageReceived = false;
 function interceptConsoleLog() {
   if (consoleIntercepted) return;
   const originalLog = console.log;
-  let lastTestIndex;
+  let lastTestIndex, lastPath;
   console.log = function() {
     let message = Array.prototype.join.call(arguments, ' ');
     if (!/^(FIREBASE: \n?)+/.test(message)) return originalLog.apply(console, arguments);
@@ -446,6 +446,19 @@ function interceptConsoleLog() {
       .replace(/^(FIREBASE: \n?)+/, '')
       .replace(/^\s+([^.]*):(?:\.(read|write|validate):)?.*/g, function(match, g1, g2) {
         g2 = g2 || 'read';
+        if (g2 === 'validate') g2 = 'value';
+        const nextPath = g1;
+        if (lastPath && lastPath !== '/') {
+          if (g1.startsWith(lastPath + '/')) {
+            g1 = './' + g1.slice(lastPath.length + 1);
+          } else {
+            lastPath = lastPath.replace(/\/[^/]+$/, '');
+            if (g1.startsWith(lastPath + '/')) {
+              g1 = '../' + g1.slice(lastPath.length + 1);
+            }
+          }
+        }
+        lastPath = nextPath;
         return ' ' + g2 + ' ' + g1;
       });
     if (/^\s+/.test(message)) {
@@ -465,6 +478,7 @@ function interceptConsoleLog() {
       if (lastTestIndex === simulationConsoleLogs.length - 1) simulationConsoleLogs.pop();
       simulationConsoleLogs.push(message);
       lastTestIndex = undefined;
+      lastPath = null;
     }
   };
   consoleIntercepted = true;

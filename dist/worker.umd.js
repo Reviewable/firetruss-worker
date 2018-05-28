@@ -11,7 +11,7 @@
   var consoleIntercepted = false;
   var simulationConsoleLogs;
   // This version is filled in by the build, don't reformat the line.
-  var VERSION = '0.8.0';
+  var VERSION = 'dev';
 
 
   var LocalStorage = function LocalStorage() {
@@ -527,7 +527,7 @@
   function interceptConsoleLog() {
     if (consoleIntercepted) { return; }
     var originalLog = console.log;
-    var lastTestIndex;
+    var lastTestIndex, lastPath;
     console.log = function() {
       var message = Array.prototype.join.call(arguments, ' ');
       if (!/^(FIREBASE: \n?)+/.test(message)) { return originalLog.apply(console, arguments); }
@@ -535,6 +535,19 @@
         .replace(/^(FIREBASE: \n?)+/, '')
         .replace(/^\s+([^.]*):(?:\.(read|write|validate):)?.*/g, function(match, g1, g2) {
           g2 = g2 || 'read';
+          if (g2 === 'validate') { g2 = 'value'; }
+          var nextPath = g1;
+          if (lastPath && lastPath !== '/') {
+            if (g1.startsWith(lastPath + '/')) {
+              g1 = './' + g1.slice(lastPath.length + 1);
+            } else {
+              lastPath = lastPath.replace(/\/[^/]+$/, '');
+              if (g1.startsWith(lastPath + '/')) {
+                g1 = '../' + g1.slice(lastPath.length + 1);
+              }
+            }
+          }
+          lastPath = nextPath;
           return ' ' + g2 + ' ' + g1;
         });
       if (/^\s+/.test(message)) {
@@ -554,6 +567,7 @@
         if (lastTestIndex === simulationConsoleLogs.length - 1) { simulationConsoleLogs.pop(); }
         simulationConsoleLogs.push(message);
         lastTestIndex = undefined;
+        lastPath = null;
       }
     };
     consoleIntercepted = true;
