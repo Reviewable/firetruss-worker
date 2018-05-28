@@ -3,7 +3,7 @@
 const fireworkers = [];
 let simulationQueue = Promise.resolve(), consoleIntercepted = false, simulationConsoleLogs;
 // This version is filled in by the build, don't reformat the line.
-const VERSION = 'dev';
+const VERSION = '0.8.1';
 
 
 class LocalStorage {
@@ -438,7 +438,7 @@ Fireworker._firstMessageReceived = false;
 function interceptConsoleLog() {
   if (consoleIntercepted) return;
   const originalLog = console.log;
-  let lastTestIndex, lastPath;
+  let lastTestIndex;
   console.log = function() {
     let message = Array.prototype.join.call(arguments, ' ');
     if (!/^(FIREBASE: \n?)+/.test(message)) return originalLog.apply(console, arguments);
@@ -447,25 +447,17 @@ function interceptConsoleLog() {
       .replace(/^\s+([^.]*):(?:\.(read|write|validate):)?.*/g, function(match, g1, g2) {
         g2 = g2 || 'read';
         if (g2 === 'validate') g2 = 'value';
-        const nextPath = g1;
-        if (lastPath && lastPath !== '/') {
-          if (g1.startsWith(lastPath + '/')) {
-            g1 = './' + g1.slice(lastPath.length + 1);
-          } else {
-            lastPath = lastPath.replace(/\/[^/]+$/, '');
-            if (g1.startsWith(lastPath + '/')) {
-              g1 = '../' + g1.slice(lastPath.length + 1);
-            }
-          }
-        }
-        lastPath = nextPath;
         return ' ' + g2 + ' ' + g1;
       });
     if (/^\s+/.test(message)) {
       const match = message.match(/^\s+=> (true|false)/);
       if (match) {
-        simulationConsoleLogs[lastTestIndex] =
-          (match[1] === 'true' ? ' \u2713' : ' \u2717') + simulationConsoleLogs[lastTestIndex];
+        if (match[1] === 'true' && simulationConsoleLogs[lastTestIndex].startsWith(' value')) {
+          simulationConsoleLogs.splice(lastTestIndex, 1);
+        } else {
+          simulationConsoleLogs[lastTestIndex] =
+            (match[1] === 'true' ? ' \u2713' : ' \u2717') + simulationConsoleLogs[lastTestIndex];
+        }
         lastTestIndex = undefined;
       } else {
         if (lastTestIndex === simulationConsoleLogs.length - 1) simulationConsoleLogs.pop();
@@ -478,7 +470,6 @@ function interceptConsoleLog() {
       if (lastTestIndex === simulationConsoleLogs.length - 1) simulationConsoleLogs.pop();
       simulationConsoleLogs.push(message);
       lastTestIndex = undefined;
-      lastPath = null;
     }
   };
   consoleIntercepted = true;

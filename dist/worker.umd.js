@@ -527,7 +527,7 @@
   function interceptConsoleLog() {
     if (consoleIntercepted) { return; }
     var originalLog = console.log;
-    var lastTestIndex, lastPath;
+    var lastTestIndex;
     console.log = function() {
       var message = Array.prototype.join.call(arguments, ' ');
       if (!/^(FIREBASE: \n?)+/.test(message)) { return originalLog.apply(console, arguments); }
@@ -536,25 +536,17 @@
         .replace(/^\s+([^.]*):(?:\.(read|write|validate):)?.*/g, function(match, g1, g2) {
           g2 = g2 || 'read';
           if (g2 === 'validate') { g2 = 'value'; }
-          var nextPath = g1;
-          if (lastPath && lastPath !== '/') {
-            if (g1.startsWith(lastPath + '/')) {
-              g1 = './' + g1.slice(lastPath.length + 1);
-            } else {
-              lastPath = lastPath.replace(/\/[^/]+$/, '');
-              if (g1.startsWith(lastPath + '/')) {
-                g1 = '../' + g1.slice(lastPath.length + 1);
-              }
-            }
-          }
-          lastPath = nextPath;
           return ' ' + g2 + ' ' + g1;
         });
       if (/^\s+/.test(message)) {
         var match = message.match(/^\s+=> (true|false)/);
         if (match) {
-          simulationConsoleLogs[lastTestIndex] =
-            (match[1] === 'true' ? ' \u2713' : ' \u2717') + simulationConsoleLogs[lastTestIndex];
+          if (match[1] === 'true' && simulationConsoleLogs[lastTestIndex].startsWith(' value')) {
+            simulationConsoleLogs.splice(lastTestIndex, 1);
+          } else {
+            simulationConsoleLogs[lastTestIndex] =
+              (match[1] === 'true' ? ' \u2713' : ' \u2717') + simulationConsoleLogs[lastTestIndex];
+          }
           lastTestIndex = undefined;
         } else {
           if (lastTestIndex === simulationConsoleLogs.length - 1) { simulationConsoleLogs.pop(); }
@@ -567,7 +559,6 @@
         if (lastTestIndex === simulationConsoleLogs.length - 1) { simulationConsoleLogs.pop(); }
         simulationConsoleLogs.push(message);
         lastTestIndex = undefined;
-        lastPath = null;
       }
     };
     consoleIntercepted = true;
