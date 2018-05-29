@@ -3,7 +3,7 @@
 const fireworkers = [];
 let simulationQueue = Promise.resolve(), consoleIntercepted = false, simulationConsoleLogs;
 // This version is filled in by the build, don't reformat the line.
-const VERSION = '0.8.1';
+const VERSION = '0.8.2';
 
 
 class LocalStorage {
@@ -364,13 +364,6 @@ export default class Fireworker {
       }
       branch.set(value);
       if (!stale) return value;
-    }).catch(error => {
-      if (error.message === 'set' || error.message === 'disconnect') {
-        return ref.once('value').then(snapshot => {
-          return {committed: false, snapshots: [snapshot], writeSerial: this._lastWriteSerial};
-        });
-      }
-      return Promise.reject(error);
     }).then(result => {
       const snapshots = [];
       const updates = branch.diff(normalizeFirebaseValue(result.snapshot.val()), transactionPath);
@@ -381,6 +374,13 @@ export default class Fireworker {
         });
       }
       return {committed: !stale, snapshots};
+    }, error => {
+      if (error.message === 'set' || error.message === 'disconnect') {
+        return ref.once('value').then(snapshot => {
+          return {committed: false, snapshots: [snapshot], writeSerial: this._lastWriteSerial};
+        });
+      }
+      return Promise.reject(error);
     });
   }
 

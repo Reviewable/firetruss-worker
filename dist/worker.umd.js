@@ -444,13 +444,6 @@
       }
       branch.set(value);
       if (!stale) { return value; }
-    }).catch(function (error) {
-      if (error.message === 'set' || error.message === 'disconnect') {
-        return ref.once('value').then(function (snapshot) {
-          return {committed: false, snapshots: [snapshot], writeSerial: this$1._lastWriteSerial};
-        });
-      }
-      return Promise.reject(error);
     }).then(function (result) {
       var snapshots = [];
       var updates = branch.diff(normalizeFirebaseValue(result.snapshot.val()), transactionPath);
@@ -461,6 +454,13 @@
         });
       }
       return {committed: !stale, snapshots: snapshots};
+    }, function (error) {
+      if (error.message === 'set' || error.message === 'disconnect') {
+        return ref.once('value').then(function (snapshot) {
+          return {committed: false, snapshots: [snapshot], writeSerial: this$1._lastWriteSerial};
+        });
+      }
+      return Promise.reject(error);
     });
   };
 
