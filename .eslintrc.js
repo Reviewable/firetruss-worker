@@ -1,15 +1,13 @@
 module.exports = {
   env: {
-    worker: true
+    worker: true,
+    es6: true
   },
   parserOptions: {
     ecmaVersion: 6,
     sourceType: 'module'
   },
   extends: ['eslint:recommended'],
-  globals: {
-    Promise: false,
-  },
   rules: {
     'accessor-pairs': 'error',
     'array-bracket-spacing': 'warn',
