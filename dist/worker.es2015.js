@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '0.8.2';
+var VERSION = '1.0.0';
 
 
 var LocalStorage = function LocalStorage() {
