@@ -4,14 +4,12 @@
   (global.Fireworker = factory());
 }(this, (function () { 'use strict';
 
-  /* globals Firebase, setTimeout, setInterval */
+  /* globals firebase, setTimeout, setInterval */
 
   var fireworkers = [];
-  var simulationQueue = Promise.resolve();
-  var consoleIntercepted = false;
-  var simulationConsoleLogs;
+  var apps = {};
   // This version is filled in by the build, don't reformat the line.
-  var VERSION = '0.8.3';
+  var VERSION = '0.8.2';
 
 
   var LocalStorage = function LocalStorage() {
@@ -175,14 +173,21 @@
 
   Fireworker.prototype.init = function init (ref) {
       var storage = ref.storage;
-      var url = ref.url;
+      var config = ref.config;
 
     if (storage) { self.localStorage.init(storage); }
-    if (url) { createRef(url); }
+    if (config) {
+      if (!apps[config.databaseURL]) {
+        apps[config.databaseURL] = firebase.initializeApp(config, config.databaseURL);
+      }
+      this._app = apps[config.databaseURL];
+      this._app.database();
+      this._app.auth();
+    }
     return {
       exposedFunctionNames: Object.keys(Fireworker._exposed),
       version: VERSION,
-      firebaseSdkVersion: Firebase.SDK_VERSION
+      firebaseSdkVersion: firebase.SDK_VERSION
     };
   };
 
@@ -205,8 +210,9 @@
   };
 
   Fireworker.prototype.bounceConnection = function bounceConnection () {
-    Firebase.goOffline();
-    Firebase.goOnline();
+    if (!this._app) { throw new Error('Must provide Firebase configuration data first'); }
+    this._app.database().goOffline();
+    this._app.database().goOnline();
   };
 
   Fireworker.prototype._receive = function _receive (event) {
@@ -269,15 +275,15 @@
   Fireworker.prototype.authWithCustomToken = function authWithCustomToken (ref) {
       var url = ref.url;
       var authToken = ref.authToken;
-      var options = ref.options;
 
-    return createRef(url).authWithCustomToken(authToken, options);
+    return this._app.auth().signInWithCustomToken(authToken)
+      .then(function (result) { return result.user && result.user.toJSON(); });
   };
 
   Fireworker.prototype.unauth = function unauth (ref) {
       var url = ref.url;
 
-    return createRef(url).unauth();
+    return this._app.auth().signOut();
   };
 
   Fireworker.prototype.onAuth = function onAuth (ref) {
@@ -285,37 +291,32 @@
       var callbackId = ref.callbackId;
 
     var authCallback = this._callbacks[callbackId] = this._onAuthCallback.bind(this, callbackId);
-    authCallback.cancel = this._offAuth.bind(this, url, authCallback);
-    createRef(url).onAuth(authCallback);
-  };
-
-  Fireworker.prototype._offAuth = function _offAuth (url, authCallback) {
-    createRef(url).offAuth(authCallback);
+    authCallback.cancel = this._app.auth().onAuthStateChanged(authCallback);
   };
 
   Fireworker.prototype._onAuthCallback = function _onAuthCallback (callbackId, auth) {
-    this._send({msg: 'callback', id: callbackId, args: [auth]});
+    this._send({msg: 'callback', id: callbackId, args: [auth && auth.toJSON()]});
   };
 
   Fireworker.prototype.set = function set (ref) {
       var url = ref.url;
       var value = ref.value;
 
-    return createRef(url).set(value);
+    return this._createRef(url).set(value);
   };
 
   Fireworker.prototype.update = function update (ref) {
       var url = ref.url;
       var value = ref.value;
 
-    return createRef(url).update(value);
+    return this._createRef(url).update(value);
   };
 
   Fireworker.prototype.once = function once (ref) {
       var this$1 = this;
       var url = ref.url;
 
-    return createRef(url).once('value').then(function (snapshot) { return this$1._snapshotToJson(snapshot); });
+    return this._createRef(url).once('value').then(function (snapshot) { return this$1._snapshotToJson(snapshot); });
   };
 
   Fireworker.prototype.on = function on (ref) {
@@ -335,7 +336,7 @@
     snapshotCallback.eventType = eventType;
     snapshotCallback.cancel = options.cancel;
     var cancelCallback = this._onCancelCallback.bind(this, callbackId);
-    createRef(url, spec).on(eventType, snapshotCallback, cancelCallback);
+    this._createRef(url, spec).on(eventType, snapshotCallback, cancelCallback);
   };
 
   Fireworker.prototype.off = function off (ref) {
@@ -363,7 +364,7 @@
         }
       }
     }
-    createRef(url, spec).off(eventType, snapshotCallback);
+    this._createRef(url, spec).off(eventType, snapshotCallback);
   };
 
   Fireworker.prototype._onSnapshotCallback = function _onSnapshotCallback (callbackId, options, snapshot) {
@@ -371,7 +372,7 @@
 
     if (options.sync && options.rest) {
       var path = decodeURIComponent(
-        snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
+        snapshot.ref.toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
       var value;
       try {
         value = normalizeFirebaseValue(snapshot.val());
@@ -415,11 +416,12 @@
       var relativeUpdates = ref$1.relativeUpdates;
 
     var transactionPath = decodeURIComponent(url.replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
-    var ref = createRef(url);
+    var ref = this._createRef(url);
     var branch = new Branch();
-    var stale;
+    var stale, committedValue;
 
     return ref.transaction(function (value) {
+      committedValue = undefined;
       value = normalizeFirebaseValue(value);
       stale = !areEqualNormalFirebaseValues(value, oldValue);
       if (stale) { value = oldValue; }
@@ -443,7 +445,10 @@
         }
       }
       branch.set(value);
-      if (!stale) { return value; }
+      if (!stale) {
+        committedValue = value;
+        return value;
+      }
     }).then(function (result) {
       var snapshots = [];
       var updates = branch.diff(normalizeFirebaseValue(result.snapshot.val()), transactionPath);
@@ -460,13 +465,14 @@
           return {committed: false, snapshots: [snapshot], writeSerial: this$1._lastWriteSerial};
         });
       }
+      error.committedValue = committedValue;
       return Promise.reject(error);
     });
   };
 
   Fireworker.prototype._snapshotToJson = function _snapshotToJson (snapshot) {
     var path =
-      decodeURIComponent(snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
+      decodeURIComponent(snapshot.ref.toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
     return {
       path: path, value: normalizeFirebaseValue(snapshot.val()), writeSerial: this._lastWriteSerial
     };
@@ -477,35 +483,31 @@
       var method = ref.method;
       var value = ref.value;
 
-    var onDisconnect = createRef(url).onDisconnect();
+    var onDisconnect = this._createRef(url).onDisconnect();
     return onDisconnect[method](value);
   };
 
-  Fireworker.prototype.simulate = function simulate (ref) {
-      var token = ref.token;
-      var method = ref.method;
-      var url = ref.url;
-      var spec = ref.spec;
-      var args = ref.args;
-
-    interceptConsoleLog();
-    var simulatedFirebase;
-    return (simulationQueue = simulationQueue.catch(function () {/* ignore */}).then(function () {
-      simulationConsoleLogs = [];
-      simulatedFirebase = createRef(url, spec, 'permission_denied_simulator');
-      simulatedFirebase.unauth();
-      return simulatedFirebase.authWithCustomToken(token, function () {/* ignore */}, {remember: 'none'});
-    }).then(function () {
-      return simulatedFirebase[method].apply(simulatedFirebase, args);
-    }).then(function () {
-      return null;
-    }, function (e) {
-      var code = e.code || e.message;
-      if (code && code.toLowerCase() === 'permission_denied') {
-        return simulationConsoleLogs.join('\n');
+  Fireworker.prototype._createRef = function _createRef (url, spec) {
+    if (!this._app) { throw new Error('Must provide Firebase configuration data first'); }
+    try {
+      var ref = this._app.database().refFromURL(url);
+      if (spec) {
+        switch (spec.by) {
+          case '$key': ref = ref.orderByKey(); break;
+          case '$value': ref = ref.orderByValue(); break;
+          default: ref = ref.orderByChild(spec.by); break;
+        }
+        if (spec.at) { ref = ref.equalTo(spec.at); }
+        else if (spec.from) { ref = ref.startAt(spec.from); }
+        else if (spec.to) { ref = ref.endAt(spec.to); }
+        if (spec.first) { ref = ref.limitToFirst(spec.first); }
+        else if (spec.last) { ref = ref.limitToLast(spec.last); }
       }
-      return 'Got a different error in simulation: ' + e;
-    }));
+      return ref;
+    } catch (e) {
+      e.extra = {url: url, spec: spec};
+      throw e;
+    }
   };
 
   Fireworker.expose = function expose (fn, name) {
@@ -523,47 +525,6 @@
   Fireworker._exposed = {};
   Fireworker._firstMessageReceived = false;
 
-
-  function interceptConsoleLog() {
-    if (consoleIntercepted) { return; }
-    var originalLog = console.log;
-    var lastTestIndex;
-    console.log = function() {
-      var message = Array.prototype.join.call(arguments, ' ');
-      if (!/^(FIREBASE: \n?)+/.test(message)) { return originalLog.apply(console, arguments); }
-      message = message
-        .replace(/^(FIREBASE: \n?)+/, '')
-        .replace(/^\s+([^.]*):(?:\.(read|write|validate):)?.*/g, function(match, g1, g2) {
-          g2 = g2 || 'read';
-          if (g2 === 'validate') { g2 = 'value'; }
-          return ' ' + g2 + ' ' + g1;
-        });
-      if (/^\s+/.test(message)) {
-        var match = message.match(/^\s+=> (true|false)/);
-        if (match) {
-          if (match[1] === 'true' && simulationConsoleLogs[lastTestIndex].startsWith(' value')) {
-            simulationConsoleLogs.splice(lastTestIndex, 1);
-          } else {
-            simulationConsoleLogs[lastTestIndex] =
-              (match[1] === 'true' ? ' \u2713' : ' \u2717') + simulationConsoleLogs[lastTestIndex];
-          }
-          lastTestIndex = undefined;
-        } else {
-          if (lastTestIndex === simulationConsoleLogs.length - 1) { simulationConsoleLogs.pop(); }
-          simulationConsoleLogs.push(message);
-          lastTestIndex = simulationConsoleLogs.length - 1;
-        }
-      } else if (/^\d+:\d+: /.test(message)) {
-        simulationConsoleLogs.push('   ' + message);
-      } else {
-        if (lastTestIndex === simulationConsoleLogs.length - 1) { simulationConsoleLogs.pop(); }
-        simulationConsoleLogs.push(message);
-        lastTestIndex = undefined;
-      }
-    };
-    consoleIntercepted = true;
-  }
-
   function errorToJson(error) {
     var json = {name: error.name};
     var propertyNames = Object.getOwnPropertyNames(error);
@@ -573,28 +534,6 @@
       json[propertyName] = error[propertyName];
     }
     return json;
-  }
-
-  function createRef(url, spec, context) {
-    try {
-      var ref = new Firebase(url, context);
-      if (spec) {
-        switch (spec.by) {
-          case '$key': ref = ref.orderByKey(); break;
-          case '$value': ref = ref.orderByValue(); break;
-          default: ref = ref.orderByChild(spec.by); break;
-        }
-        if (spec.at) { ref = ref.equalTo(spec.at); }
-        else if (spec.from) { ref = ref.startAt(spec.from); }
-        else if (spec.to) { ref = ref.endAt(spec.to); }
-        if (spec.first) { ref = ref.limitToFirst(spec.first); }
-        else if (spec.last) { ref = ref.limitToLast(spec.last); }
-      }
-      return ref;
-    } catch (e) {
-      e.extra = {url: url, spec: spec, context: context};
-      throw e;
-    }
   }
 
   function normalizeFirebaseValue(value) {

@@ -1,7 +1,7 @@
-/* globals Firebase, setTimeout, setInterval */
+/* globals firebase, setTimeout, setInterval */
 
 const fireworkers = [];
-let simulationQueue = Promise.resolve(), consoleIntercepted = false, simulationConsoleLogs;
+const apps = {};
 // This version is filled in by the build, don't reformat the line.
 const VERSION = '0.8.2';
 
@@ -150,13 +150,20 @@ export default class Fireworker {
     port.onmessage = this._receive.bind(this);
   }
 
-  init({storage, url}) {
+  init({storage, config}) {
     if (storage) self.localStorage.init(storage);
-    if (url) createRef(url);
+    if (config) {
+      if (!apps[config.databaseURL]) {
+        apps[config.databaseURL] = firebase.initializeApp(config, config.databaseURL);
+      }
+      this._app = apps[config.databaseURL];
+      this._app.database();
+      this._app.auth();
+    }
     return {
       exposedFunctionNames: Object.keys(Fireworker._exposed),
       version: VERSION,
-      firebaseSdkVersion: Firebase.SDK_VERSION
+      firebaseSdkVersion: firebase.SDK_VERSION
     };
   }
 
@@ -177,8 +184,9 @@ export default class Fireworker {
   }
 
   bounceConnection() {
-    Firebase.goOffline();
-    Firebase.goOnline();
+    if (!this._app) throw new Error('Must provide Firebase configuration data first');
+    this._app.database().goOffline();
+    this._app.database().goOnline();
   }
 
   _receive(event) {
@@ -227,38 +235,34 @@ export default class Fireworker {
     }
   }
 
-  authWithCustomToken({url, authToken, options}) {
-    return createRef(url).authWithCustomToken(authToken, options);
+  authWithCustomToken({url, authToken}) {
+    return this._app.auth().signInWithCustomToken(authToken)
+      .then(result => result.user && result.user.toJSON());
   }
 
   unauth({url}) {
-    return createRef(url).unauth();
+    return this._app.auth().signOut();
   }
 
   onAuth({url, callbackId}) {
     const authCallback = this._callbacks[callbackId] = this._onAuthCallback.bind(this, callbackId);
-    authCallback.cancel = this._offAuth.bind(this, url, authCallback);
-    createRef(url).onAuth(authCallback);
-  }
-
-  _offAuth(url, authCallback) {
-    createRef(url).offAuth(authCallback);
+    authCallback.cancel = this._app.auth().onAuthStateChanged(authCallback);
   }
 
   _onAuthCallback(callbackId, auth) {
-    this._send({msg: 'callback', id: callbackId, args: [auth]});
+    this._send({msg: 'callback', id: callbackId, args: [auth && auth.toJSON()]});
   }
 
   set({url, value}) {
-    return createRef(url).set(value);
+    return this._createRef(url).set(value);
   }
 
   update({url, value}) {
-    return createRef(url).update(value);
+    return this._createRef(url).update(value);
   }
 
   once({url}) {
-    return createRef(url).once('value').then(snapshot => this._snapshotToJson(snapshot));
+    return this._createRef(url).once('value').then(snapshot => this._snapshotToJson(snapshot));
   }
 
   on({listenerKey, url, spec, eventType, callbackId, options}) {
@@ -271,7 +275,7 @@ export default class Fireworker {
     snapshotCallback.eventType = eventType;
     snapshotCallback.cancel = options.cancel;
     const cancelCallback = this._onCancelCallback.bind(this, callbackId);
-    createRef(url, spec).on(eventType, snapshotCallback, cancelCallback);
+    this._createRef(url, spec).on(eventType, snapshotCallback, cancelCallback);
   }
 
   off({listenerKey, url, spec, eventType, callbackId}) {
@@ -290,13 +294,13 @@ export default class Fireworker {
         }
       }
     }
-    createRef(url, spec).off(eventType, snapshotCallback);
+    this._createRef(url, spec).off(eventType, snapshotCallback);
   }
 
   _onSnapshotCallback(callbackId, options, snapshot) {
     if (options.sync && options.rest) {
       const path = decodeURIComponent(
-        snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
+        snapshot.ref.toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
       let value;
       try {
         value = normalizeFirebaseValue(snapshot.val());
@@ -335,11 +339,12 @@ export default class Fireworker {
 
   transaction({url, oldValue, relativeUpdates}) {
     const transactionPath = decodeURIComponent(url.replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
-    const ref = createRef(url);
+    const ref = this._createRef(url);
     const branch = new Branch();
-    let stale;
+    let stale, committedValue;
 
     return ref.transaction(value => {
+      committedValue = undefined;
       value = normalizeFirebaseValue(value);
       stale = !areEqualNormalFirebaseValues(value, oldValue);
       if (stale) value = oldValue;
@@ -363,7 +368,10 @@ export default class Fireworker {
         }
       }
       branch.set(value);
-      if (!stale) return value;
+      if (!stale) {
+        committedValue = value;
+        return value;
+      }
     }).then(result => {
       const snapshots = [];
       const updates = branch.diff(normalizeFirebaseValue(result.snapshot.val()), transactionPath);
@@ -380,42 +388,45 @@ export default class Fireworker {
           return {committed: false, snapshots: [snapshot], writeSerial: this._lastWriteSerial};
         });
       }
+      error.committedValue = committedValue;
       return Promise.reject(error);
     });
   }
 
   _snapshotToJson(snapshot) {
     const path =
-      decodeURIComponent(snapshot.ref().toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
+      decodeURIComponent(snapshot.ref.toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
     return {
       path, value: normalizeFirebaseValue(snapshot.val()), writeSerial: this._lastWriteSerial
     };
   }
 
   onDisconnect({url, method, value}) {
-    const onDisconnect = createRef(url).onDisconnect();
+    const onDisconnect = this._createRef(url).onDisconnect();
     return onDisconnect[method](value);
   }
 
-  simulate({token, method, url, spec, args}) {
-    interceptConsoleLog();
-    let simulatedFirebase;
-    return (simulationQueue = simulationQueue.catch(() => {/* ignore */}).then(() => {
-      simulationConsoleLogs = [];
-      simulatedFirebase = createRef(url, spec, 'permission_denied_simulator');
-      simulatedFirebase.unauth();
-      return simulatedFirebase.authWithCustomToken(token, () => {/* ignore */}, {remember: 'none'});
-    }).then(() => {
-      return simulatedFirebase[method].apply(simulatedFirebase, args);
-    }).then(() => {
-      return null;
-    }, e => {
-      const code = e.code || e.message;
-      if (code && code.toLowerCase() === 'permission_denied') {
-        return simulationConsoleLogs.join('\n');
+  _createRef(url, spec) {
+    if (!this._app) throw new Error('Must provide Firebase configuration data first');
+    try {
+      let ref = this._app.database().refFromURL(url);
+      if (spec) {
+        switch (spec.by) {
+          case '$key': ref = ref.orderByKey(); break;
+          case '$value': ref = ref.orderByValue(); break;
+          default: ref = ref.orderByChild(spec.by); break;
+        }
+        if (spec.at) ref = ref.equalTo(spec.at);
+        else if (spec.from) ref = ref.startAt(spec.from);
+        else if (spec.to) ref = ref.endAt(spec.to);
+        if (spec.first) ref = ref.limitToFirst(spec.first);
+        else if (spec.last) ref = ref.limitToLast(spec.last);
       }
-      return 'Got a different error in simulation: ' + e;
-    }));
+      return ref;
+    } catch (e) {
+      e.extra = {url, spec};
+      throw e;
+    }
   }
 
   static expose(fn, name) {
@@ -434,47 +445,6 @@ export default class Fireworker {
 Fireworker._exposed = {};
 Fireworker._firstMessageReceived = false;
 
-
-function interceptConsoleLog() {
-  if (consoleIntercepted) return;
-  const originalLog = console.log;
-  let lastTestIndex;
-  console.log = function() {
-    let message = Array.prototype.join.call(arguments, ' ');
-    if (!/^(FIREBASE: \n?)+/.test(message)) return originalLog.apply(console, arguments);
-    message = message
-      .replace(/^(FIREBASE: \n?)+/, '')
-      .replace(/^\s+([^.]*):(?:\.(read|write|validate):)?.*/g, function(match, g1, g2) {
-        g2 = g2 || 'read';
-        if (g2 === 'validate') g2 = 'value';
-        return ' ' + g2 + ' ' + g1;
-      });
-    if (/^\s+/.test(message)) {
-      const match = message.match(/^\s+=> (true|false)/);
-      if (match) {
-        if (match[1] === 'true' && simulationConsoleLogs[lastTestIndex].startsWith(' value')) {
-          simulationConsoleLogs.splice(lastTestIndex, 1);
-        } else {
-          simulationConsoleLogs[lastTestIndex] =
-            (match[1] === 'true' ? ' \u2713' : ' \u2717') + simulationConsoleLogs[lastTestIndex];
-        }
-        lastTestIndex = undefined;
-      } else {
-        if (lastTestIndex === simulationConsoleLogs.length - 1) simulationConsoleLogs.pop();
-        simulationConsoleLogs.push(message);
-        lastTestIndex = simulationConsoleLogs.length - 1;
-      }
-    } else if (/^\d+:\d+: /.test(message)) {
-      simulationConsoleLogs.push('   ' + message);
-    } else {
-      if (lastTestIndex === simulationConsoleLogs.length - 1) simulationConsoleLogs.pop();
-      simulationConsoleLogs.push(message);
-      lastTestIndex = undefined;
-    }
-  };
-  consoleIntercepted = true;
-}
-
 function errorToJson(error) {
   const json = {name: error.name};
   const propertyNames = Object.getOwnPropertyNames(error);
@@ -482,28 +452,6 @@ function errorToJson(error) {
     json[propertyName] = error[propertyName];
   }
   return json;
-}
-
-function createRef(url, spec, context) {
-  try {
-    let ref = new Firebase(url, context);
-    if (spec) {
-      switch (spec.by) {
-        case '$key': ref = ref.orderByKey(); break;
-        case '$value': ref = ref.orderByValue(); break;
-        default: ref = ref.orderByChild(spec.by); break;
-      }
-      if (spec.at) ref = ref.equalTo(spec.at);
-      else if (spec.from) ref = ref.startAt(spec.from);
-      else if (spec.to) ref = ref.endAt(spec.to);
-      if (spec.first) ref = ref.limitToFirst(spec.first);
-      else if (spec.last) ref = ref.limitToLast(spec.last);
-    }
-    return ref;
-  } catch (e) {
-    e.extra = {url, spec, context};
-    throw e;
-  }
 }
 
 function normalizeFirebaseValue(value) {
