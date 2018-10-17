@@ -237,7 +237,7 @@ export default class Fireworker {
 
   authWithCustomToken({url, authToken}) {
     return this._app.auth().signInWithCustomToken(authToken)
-      .then(result => result.user && result.user.toJSON());
+      .then(result => userToJson(result.user));
   }
 
   unauth({url}) {
@@ -249,8 +249,10 @@ export default class Fireworker {
     authCallback.cancel = this._app.auth().onAuthStateChanged(authCallback);
   }
 
-  _onAuthCallback(callbackId, auth) {
-    this._send({msg: 'callback', id: callbackId, args: [auth && auth.toJSON()]});
+  _onAuthCallback(callbackId, user) {
+    userToJson(user).then(jsonUser => {
+      this._send({msg: 'callback', id: callbackId, args: [jsonUser]});
+    });
   }
 
   set({url, value}) {
@@ -470,6 +472,17 @@ function normalizeFirebaseValue(value) {
     }
   }
   return value;
+}
+
+function userToJson(user) {
+  if (!user) return Promise.resolve(user);
+  const json = user.toJSON();
+  delete json.stsTokenManager;
+  return user.getIdTokenResult().then(result => {
+    delete result.token;
+    json.idToken = result;
+    return json;
+  });
 }
 
 

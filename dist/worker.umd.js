@@ -9,7 +9,7 @@
   var fireworkers = [];
   var apps = {};
   // This version is filled in by the build, don't reformat the line.
-  var VERSION = '1.0.0';
+  var VERSION = 'dev';
 
 
   var LocalStorage = function LocalStorage() {
@@ -277,7 +277,7 @@
       var authToken = ref.authToken;
 
     return this._app.auth().signInWithCustomToken(authToken)
-      .then(function (result) { return result.user && result.user.toJSON(); });
+      .then(function (result) { return userToJson(result.user); });
   };
 
   Fireworker.prototype.unauth = function unauth (ref) {
@@ -294,8 +294,12 @@
     authCallback.cancel = this._app.auth().onAuthStateChanged(authCallback);
   };
 
-  Fireworker.prototype._onAuthCallback = function _onAuthCallback (callbackId, auth) {
-    this._send({msg: 'callback', id: callbackId, args: [auth && auth.toJSON()]});
+  Fireworker.prototype._onAuthCallback = function _onAuthCallback (callbackId, user) {
+      var this$1 = this;
+
+    userToJson(user).then(function (jsonUser) {
+      this$1._send({msg: 'callback', id: callbackId, args: [jsonUser]});
+    });
   };
 
   Fireworker.prototype.set = function set (ref) {
@@ -552,6 +556,17 @@
       }
     }
     return value;
+  }
+
+  function userToJson(user) {
+    if (!user) { return Promise.resolve(user); }
+    var json = user.toJSON();
+    delete json.stsTokenManager;
+    return user.getIdTokenResult().then(function (result) {
+      delete result.token;
+      json.idToken = result;
+      return json;
+    });
   }
 
 
