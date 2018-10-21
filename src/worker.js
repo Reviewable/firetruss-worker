@@ -144,6 +144,7 @@ export default class Fireworker {
     this.ping();
     this._port = port;
     this._lastWriteSerial = 0;
+    this._configError = undefined;
     this._callbacks = {};
     this._messages = [];
     this._flushMessageQueue = this._flushMessageQueue.bind(this);
@@ -153,12 +154,20 @@ export default class Fireworker {
   init({storage, config}) {
     if (storage) self.localStorage.init(storage);
     if (config) {
-      if (!apps[config.databaseURL]) {
-        apps[config.databaseURL] = firebase.initializeApp(config, config.databaseURL);
+      try {
+        if (!apps[config.databaseURL]) {
+          apps[config.databaseURL] = firebase.initializeApp(config, config.databaseURL);
+        }
+        this._app = apps[config.databaseURL];
+        this._app.database();
+        this._app.auth();
+        this._configError = undefined;
+      } catch (e) {
+        this._configError = e;
+        throw e;
       }
-      this._app = apps[config.databaseURL];
-      this._app.database();
-      this._app.auth();
+    } else if (this._configError) {
+      throw this._configError;
     }
     return {
       exposedFunctionNames: Object.keys(Fireworker._exposed),
