@@ -533,7 +533,7 @@ Fireworker._exposed = {};
 Fireworker._firstMessageReceived = false;
 
 function errorToJson(error) {
-  var json = {name: error.name};
+  var json = {name: error.name, message: error.message};
   var propertyNames = Object.getOwnPropertyNames(error);
   for (var i = 0, list = propertyNames; i < list.length; i += 1) {
     var propertyName = list[i];

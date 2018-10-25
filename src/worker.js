@@ -457,7 +457,7 @@ Fireworker._exposed = {};
 Fireworker._firstMessageReceived = false;
 
 function errorToJson(error) {
-  const json = {name: error.name};
+  const json = {name: error.name, message: error.message};
   const propertyNames = Object.getOwnPropertyNames(error);
   for (const propertyName of propertyNames) {
     json[propertyName] = error[propertyName];
