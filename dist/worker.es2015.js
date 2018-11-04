@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '1.1.2';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -156,7 +156,6 @@ Branch.prototype._diffRecursively = function _diffRecursively (oldValue, newValu
 
 
 var Fireworker = function Fireworker(port) {
-  this.ping();
   this._port = port;
   this._lastWriteSerial = 0;
   this._configError = undefined;
@@ -209,7 +208,7 @@ Fireworker.prototype.destroy = function destroy () {
 };
 
 Fireworker.prototype.ping = function ping () {
-  this.lastTouched = Date.now();
+  // Noop, placeholder for legacy Firetruss clients.
 };
 
 Fireworker.prototype.bounceConnection = function bounceConnection () {
@@ -222,7 +221,6 @@ Fireworker.prototype._receive = function _receive (event) {
     var this$1 = this;
 
   Fireworker._firstMessageReceived = true;
-  this.lastTouched = Date.now();
   for (var i = 0, list = event.data; i < list.length; i += 1) {
       var message = list[i];
 
@@ -598,20 +596,6 @@ function acceptConnections() {
   }
   self.localStorage.flushPending();
 }
-
-var CONNECTION_CHECK_INTERVAL = 60 * 1000;
-var lastConnectionCheck = Date.now();
-setInterval(function findAbandonedConnections() {
-  var now = Date.now(), gap = now - lastConnectionCheck - CONNECTION_CHECK_INTERVAL;
-  lastConnectionCheck = now;
-  fireworkers.forEach(function (worker) {
-    if (!worker) { return; }
-    if (gap >= 1000 && worker.lastTouched <= now - gap) { worker.lastTouched += gap; }
-    if (now - worker.lastTouched >= 3 * CONNECTION_CHECK_INTERVAL) { worker.destroy(); }
-  });
-  var k;
-  while ((k = fireworkers.indexOf(null)) >= 0) { fireworkers.splice(k, 1); }
-}, CONNECTION_CHECK_INTERVAL);
 
 self.window = self;
 acceptConnections();

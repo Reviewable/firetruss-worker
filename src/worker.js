@@ -141,7 +141,6 @@ class Branch {
 
 export default class Fireworker {
   constructor(port) {
-    this.ping();
     this._port = port;
     this._lastWriteSerial = 0;
     this._configError = undefined;
@@ -189,7 +188,7 @@ export default class Fireworker {
   }
 
   ping() {
-    this.lastTouched = Date.now();
+    // Noop, placeholder for legacy Firetruss clients.
   }
 
   bounceConnection() {
@@ -200,7 +199,6 @@ export default class Fireworker {
 
   _receive(event) {
     Fireworker._firstMessageReceived = true;
-    this.lastTouched = Date.now();
     for (const message of event.data) this._receiveMessage(message);
   }
 
@@ -520,20 +518,6 @@ function acceptConnections() {
   }
   self.localStorage.flushPending();
 }
-
-const CONNECTION_CHECK_INTERVAL = 60 * 1000;
-let lastConnectionCheck = Date.now();
-setInterval(function findAbandonedConnections() {
-  const now = Date.now(), gap = now - lastConnectionCheck - CONNECTION_CHECK_INTERVAL;
-  lastConnectionCheck = now;
-  fireworkers.forEach(worker => {
-    if (!worker) return;
-    if (gap >= 1000 && worker.lastTouched <= now - gap) worker.lastTouched += gap;
-    if (now - worker.lastTouched >= 3 * CONNECTION_CHECK_INTERVAL) worker.destroy();
-  });
-  let k;
-  while ((k = fireworkers.indexOf(null)) >= 0) fireworkers.splice(k, 1);
-}, CONNECTION_CHECK_INTERVAL);
 
 self.window = self;
 acceptConnections();
