@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '1.1.3';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -282,9 +282,13 @@ Fireworker.prototype.authWithCustomToken = function authWithCustomToken (ref) {
 };
 
 Fireworker.prototype.unauth = function unauth (ref) {
+    var this$1 = this;
     var url = ref.url;
 
-  return this._app.auth().signOut();
+  return this._app.auth().signOut().catch(function (e) {
+    // We can ignore the error if the user is signed out anyway.
+    if (this$1._app.auth().currentUser !== null) { return Promise.reject(e); }
+  });
 };
 
 Fireworker.prototype.onAuth = function onAuth (ref) {

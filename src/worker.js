@@ -248,7 +248,10 @@ export default class Fireworker {
   }
 
   unauth({url}) {
-    return this._app.auth().signOut();
+    return this._app.auth().signOut().catch(e => {
+      // We can ignore the error if the user is signed out anyway.
+      if (this._app.auth().currentUser !== null) return Promise.reject(e);
+    });
   }
 
   onAuth({url, callbackId}) {
