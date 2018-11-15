@@ -249,13 +249,23 @@ export default class Fireworker {
 
   unauth({url}) {
     return this._app.auth().signOut().catch(e => {
-      // We can ignore the error if the user is signed out anyway.
-      if (this._app.auth().currentUser !== null) return Promise.reject(e);
+      // We can ignore the error if the user is signed out anyway, but make sure to notify all
+      // authCallbacks otherwise we end up in a bogus state!
+      if (this._app.auth().currentUser === null) {
+        for (const callbackId in this._callbacks) {
+          if (!this._callbacks.hasOwnProperty(callbackId)) continue;
+          const callback = this._callbacks[callbackId];
+          if (callback.auth) callback(null);
+        }
+      } else {
+        return Promise.reject(e);
+      }
     });
   }
 
   onAuth({url, callbackId}) {
     const authCallback = this._callbacks[callbackId] = this._onAuthCallback.bind(this, callbackId);
+    authCallback.auth = true;
     authCallback.cancel = this._app.auth().onAuthStateChanged(authCallback);
   }
 

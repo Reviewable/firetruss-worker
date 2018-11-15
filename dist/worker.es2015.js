@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '1.1.4';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -286,8 +286,17 @@ Fireworker.prototype.unauth = function unauth (ref) {
     var url = ref.url;
 
   return this._app.auth().signOut().catch(function (e) {
-    // We can ignore the error if the user is signed out anyway.
-    if (this$1._app.auth().currentUser !== null) { return Promise.reject(e); }
+    // We can ignore the error if the user is signed out anyway, but make sure to notify all
+    // authCallbacks otherwise we end up in a bogus state!
+    if (this$1._app.auth().currentUser === null) {
+      for (var callbackId in this$1._callbacks) {
+        if (!this$1._callbacks.hasOwnProperty(callbackId)) { continue; }
+        var callback = this$1._callbacks[callbackId];
+        if (callback.auth) { callback(null); }
+      }
+    } else {
+      return Promise.reject(e);
+    }
   });
 };
 
@@ -296,6 +305,7 @@ Fireworker.prototype.onAuth = function onAuth (ref) {
     var callbackId = ref.callbackId;
 
   var authCallback = this._callbacks[callbackId] = this._onAuthCallback.bind(this, callbackId);
+  authCallback.auth = true;
   authCallback.cancel = this._app.auth().onAuthStateChanged(authCallback);
 };
 
