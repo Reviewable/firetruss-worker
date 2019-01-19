@@ -143,6 +143,7 @@ export default class Fireworker {
   constructor(port) {
     this._port = port;
     this._lastWriteSerial = 0;
+    this._lastJsonUser = undefined;
     this._configError = undefined;
     this._callbacks = {};
     this._messages = [];
@@ -266,11 +267,13 @@ export default class Fireworker {
   onAuth({url, callbackId}) {
     const authCallback = this._callbacks[callbackId] = this._onAuthCallback.bind(this, callbackId);
     authCallback.auth = true;
-    authCallback.cancel = this._app.auth().onAuthStateChanged(authCallback);
+    authCallback.cancel = this._app.auth().onIdTokenChanged(authCallback);
   }
 
   _onAuthCallback(callbackId, user) {
     userToJson(user).then(jsonUser => {
+      if (areEqualValues(this._lastJsonUser, jsonUser)) return;
+      this._lastJsonUser = jsonUser;
       this._send({msg: 'callback', id: callbackId, args: [jsonUser]});
     });
   }
@@ -499,8 +502,9 @@ function userToJson(user) {
   const json = user.toJSON();
   delete json.stsTokenManager;
   return user.getIdTokenResult().then(result => {
-    delete result.token;
-    json.idToken = result;
+    delete result.claims.exp;
+    delete result.claims.iat;
+    json.claims = result.claims;
     return json;
   });
 }
@@ -517,6 +521,28 @@ function areEqualNormalFirebaseValues(a, b) {
   }
   for (const key in b) {
     if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
+  }
+  return true;
+}
+
+function areEqualValues(a, b) {
+  if (a === b) return true;
+  if (a === null && b === null || a === undefined && b === undefined) return true;
+  if (a === null || b === null || a === undefined || b === undefined) return false;
+  if (!(typeof a === 'object' && typeof b === 'object')) return false;
+  for (const key in a) {
+    if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
+    if (!areEqualValues(a[key], b[key])) return false;
+  }
+  for (const key in b) {
+    if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!areEqualValues(a[i], b[i])) return false;
+    }
   }
   return true;
 }

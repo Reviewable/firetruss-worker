@@ -9,7 +9,7 @@
   var fireworkers = [];
   var apps = {};
   // This version is filled in by the build, don't reformat the line.
-  var VERSION = '1.1.5';
+  var VERSION = 'dev';
 
 
   var LocalStorage = function LocalStorage() {
@@ -164,6 +164,7 @@
   var Fireworker = function Fireworker(port) {
     this._port = port;
     this._lastWriteSerial = 0;
+    this._lastJsonUser = undefined;
     this._configError = undefined;
     this._callbacks = {};
     this._messages = [];
@@ -312,13 +313,15 @@
 
     var authCallback = this._callbacks[callbackId] = this._onAuthCallback.bind(this, callbackId);
     authCallback.auth = true;
-    authCallback.cancel = this._app.auth().onAuthStateChanged(authCallback);
+    authCallback.cancel = this._app.auth().onIdTokenChanged(authCallback);
   };
 
   Fireworker.prototype._onAuthCallback = function _onAuthCallback (callbackId, user) {
       var this$1 = this;
 
     userToJson(user).then(function (jsonUser) {
+      if (areEqualValues(this$1._lastJsonUser, jsonUser)) { return; }
+      this$1._lastJsonUser = jsonUser;
       this$1._send({msg: 'callback', id: callbackId, args: [jsonUser]});
     });
   };
@@ -584,8 +587,9 @@
     var json = user.toJSON();
     delete json.stsTokenManager;
     return user.getIdTokenResult().then(function (result) {
-      delete result.token;
-      json.idToken = result;
+      delete result.claims.exp;
+      delete result.claims.iat;
+      json.claims = result.claims;
       return json;
     });
   }
@@ -602,6 +606,28 @@
     }
     for (var key$1 in b) {
       if (!a.hasOwnProperty(key$1) || !b.hasOwnProperty(key$1)) { return false; }
+    }
+    return true;
+  }
+
+  function areEqualValues(a, b) {
+    if (a === b) { return true; }
+    if (a === null && b === null || a === undefined && b === undefined) { return true; }
+    if (a === null || b === null || a === undefined || b === undefined) { return false; }
+    if (!(typeof a === 'object' && typeof b === 'object')) { return false; }
+    for (var key in a) {
+      if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) { return false; }
+      if (!areEqualValues(a[key], b[key])) { return false; }
+    }
+    for (var key$1 in b) {
+      if (!a.hasOwnProperty(key$1) || !b.hasOwnProperty(key$1)) { return false; }
+    }
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b)) { return false; }
+      if (a.length !== b.length) { return false; }
+      for (var i = 0; i < a.length; i++) {
+        if (!areEqualValues(a[i], b[i])) { return false; }
+      }
     }
     return true;
   }
