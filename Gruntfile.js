@@ -1,9 +1,9 @@
 /* eslint-env node */
 'use strict';
 
-const buble = require('rollup-plugin-buble');
-const nodeResolve = require('rollup-plugin-node-resolve');
-const commonjs = require('rollup-plugin-commonjs');
+const buble = require('@rollup/plugin-buble');
+const nodeResolve = require('@rollup/plugin-node-resolve').nodeResolve;
+const commonjs = require('@rollup/plugin-commonjs');
 
 module.exports = function(grunt) {
 
@@ -39,8 +39,7 @@ module.exports = function(grunt) {
 
     rollup: {
       options: {
-        sourceMap: true,
-        sourceMapRelativePaths: true,
+        sourcemap: true,
         globals: {
           firebase: 'Firebase'
         },
@@ -52,15 +51,14 @@ module.exports = function(grunt) {
             }
           }),
           nodeResolve({
-            jsnext: true,
-            skip: ['firebase']
+            resolveOnly: ['bogus']  // an empty array argument gets ignored
           })
         ]
       },
       worker: {
         options: {
           format: 'umd',
-          moduleName: 'Fireworker'
+          name: 'Fireworker'
         },
         files: {
           'dist/worker.umd.js': ['src/worker.js']

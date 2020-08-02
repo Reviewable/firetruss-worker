@@ -1,9 +1,9 @@
-/* globals firebase, setTimeout, setInterval */
+/* globals firebase */
 
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '2.0.2';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -13,7 +13,7 @@ var LocalStorage = function LocalStorage() {
   this._flushPending = this.flushPending.bind(this);
 };
 
-var prototypeAccessors = { length: {} };
+var prototypeAccessors = { length: { configurable: true } };
 
 LocalStorage.prototype.init = function init (items) {
   if (!this._initialized) {
@@ -44,9 +44,7 @@ LocalStorage.prototype.key = function key (n) {
 };
 
 LocalStorage.prototype.getItem = function getItem (key) {
-    var this$1 = this;
-
-  for (var i = 0, list = this$1._items; i < list.length; i += 1) {
+  for (var i = 0, list = this._items; i < list.length; i += 1) {
     var item = list[i];
 
       if (item.key === key) { return item.value; }
@@ -55,10 +53,8 @@ LocalStorage.prototype.getItem = function getItem (key) {
 };
 
 LocalStorage.prototype.setItem = function setItem (key, value) {
-    var this$1 = this;
-
   var targetItem;
-  for (var i = 0, list = this$1._items; i < list.length; i += 1) {
+  for (var i = 0, list = this._items; i < list.length; i += 1) {
     var item = list[i];
 
       if (item.key === key) {
@@ -75,22 +71,18 @@ LocalStorage.prototype.setItem = function setItem (key, value) {
 };
 
 LocalStorage.prototype.removeItem = function removeItem (key) {
-    var this$1 = this;
-
   for (var i = 0; i < this._items.length; i++) {
-    if (this$1._items[i].key === key) {
-      this$1._items.splice(i, 1);
-      this$1._update({key: key, value: null});
+    if (this._items[i].key === key) {
+      this._items.splice(i, 1);
+      this._update({key: key, value: null});
       break;
     }
   }
 };
 
 LocalStorage.prototype.clear = function clear () {
-    var this$1 = this;
-
-  for (var item in this$1._items) {
-    this$1._update({key: item.key, value: null});
+  for (var item in this._items) {
+    this._update({key: item.key, value: null});
   }
   this._items = [];
 };
@@ -119,8 +111,6 @@ Branch.prototype.diff = function diff (value, pathPrefix) {
 };
 
 Branch.prototype._diffRecursively = function _diffRecursively (oldValue, newValue, segments, updates) {
-    var this$1 = this;
-
   if (oldValue === undefined) { oldValue = null; }
   if (newValue === undefined) { newValue = null; }
   if (oldValue === null) { return newValue !== null; }
@@ -129,7 +119,7 @@ Branch.prototype._diffRecursively = function _diffRecursively (oldValue, newValu
     var keysToReplace = [];
     for (var childKey in newValue) {
       if (!newValue.hasOwnProperty(childKey)) { continue; }
-      var replaceChild = this$1._diffRecursively(
+      var replaceChild = this._diffRecursively(
         oldValue[childKey], newValue[childKey], segments.concat(childKey), updates);
       if (replaceChild) {
         keysToReplace.push(childKey);
@@ -195,10 +185,8 @@ Fireworker.prototype.init = function init (ref) {
 };
 
 Fireworker.prototype.destroy = function destroy () {
-    var this$1 = this;
-
-  for (var key in this$1._callbacks) {
-    var callback = this$1._callbacks[key];
+  for (var key in this._callbacks) {
+    var callback = this._callbacks[key];
     if (callback.cancel) { callback.cancel(); }
   }
   this._callbacks = {};
@@ -219,13 +207,11 @@ Fireworker.prototype.bounceConnection = function bounceConnection () {
 };
 
 Fireworker.prototype._receive = function _receive (event) {
-    var this$1 = this;
-
   Fireworker._firstMessageReceived = true;
   for (var i = 0, list = event.data; i < list.length; i += 1) {
       var message = list[i];
 
-      this$1._receiveMessage(message);
+      this._receiveMessage(message);
     }
 };
 
@@ -362,7 +348,6 @@ Fireworker.prototype.on = function on (ref) {
 };
 
 Fireworker.prototype.off = function off (ref) {
-    var this$1 = this;
     var listenerKey = ref.listenerKey;
     var url = ref.url;
     var spec = ref.spec;
@@ -375,14 +360,14 @@ Fireworker.prototype.off = function off (ref) {
     snapshotCallback = this._callbacks[callbackId];
     delete this._callbacks[callbackId];
   } else {
-    for (var i = 0, list = Object.keys(this$1._callbacks); i < list.length; i += 1) {
+    for (var i = 0, list = Object.keys(this._callbacks); i < list.length; i += 1) {
       var key = list[i];
 
-        if (!this$1._callbacks.hasOwnProperty(key)) { continue; }
-      var callback = this$1._callbacks[key];
+        if (!this._callbacks.hasOwnProperty(key)) { continue; }
+      var callback = this._callbacks[key];
       if (callback.listenerKey === listenerKey &&
           (!eventType || callback.eventType === eventType)) {
-        delete this$1._callbacks[key];
+        delete this._callbacks[key];
       }
     }
   }
@@ -390,8 +375,6 @@ Fireworker.prototype.off = function off (ref) {
 };
 
 Fireworker.prototype._onSnapshotCallback = function _onSnapshotCallback (callbackId, options, snapshot) {
-    var this$1 = this;
-
   if (options.sync && options.rest) {
     var path = decodeURIComponent(
       snapshot.ref.toString().replace(/.*?:\/\/[^/]*/, '').replace(/\/$/, ''));
@@ -406,10 +389,10 @@ Fireworker.prototype._onSnapshotCallback = function _onSnapshotCallback (callbac
     var updates = options.branch.diff(value, path);
     for (var childPath in updates) {
       if (!updates.hasOwnProperty(childPath)) { continue; }
-      this$1._send({
+      this._send({
         msg: 'callback', id: callbackId,
         args: [null, {
-          path: childPath, value: updates[childPath], writeSerial: this$1._lastWriteSerial
+          path: childPath, value: updates[childPath], writeSerial: this._lastWriteSerial
         }]
       });
     }
@@ -419,9 +402,9 @@ Fireworker.prototype._onSnapshotCallback = function _onSnapshotCallback (callbac
       if (options.sync) { options.branch.set(snapshotJson.value); }
       this._send({msg: 'callback', id: callbackId, args: [null, snapshotJson]});
       options.rest = true;
-    } catch (e) {
+    } catch (e$1) {
       options.cancel();
-      this._onCancelCallback(callbackId, e);
+      this._onCancelCallback(callbackId, e$1);
     }
   }
 };

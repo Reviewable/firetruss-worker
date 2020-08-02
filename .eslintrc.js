@@ -67,6 +67,7 @@ module.exports = {
     'no-new-wrappers': 'error',
     'no-octal-escape': 'error',
     'no-proto': 'error',
+    'no-prototype-builtins': 'off',
     'no-script-url': 'error',
     'no-self-compare': 'error',
     'no-sequences': 'error',

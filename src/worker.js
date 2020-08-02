@@ -1,4 +1,4 @@
-/* globals firebase, setTimeout, setInterval */
+/* globals firebase */
 
 const fireworkers = [];
 const apps = {};
