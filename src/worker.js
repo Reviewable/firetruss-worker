@@ -248,6 +248,11 @@ export default class Fireworker {
       .then(result => userToJson(result.user));
   }
 
+  authAnonymously({url}) {
+    return this._app.auth().signInAnonymously()
+      .then(result => userToJson(result.user));
+  }
+
   unauth({url}) {
     return this._app.auth().signOut().catch(e => {
       // We can ignore the error if the user is signed out anyway, but make sure to notify all

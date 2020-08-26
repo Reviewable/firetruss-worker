@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '2.1.0';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -265,6 +265,13 @@ Fireworker.prototype.authWithCustomToken = function authWithCustomToken (ref) {
     var authToken = ref.authToken;
 
   return this._app.auth().signInWithCustomToken(authToken)
+    .then(function (result) { return userToJson(result.user); });
+};
+
+Fireworker.prototype.authAnonymously = function authAnonymously (ref) {
+    var url = ref.url;
+
+  return this._app.auth().signInAnonymously()
     .then(function (result) { return userToJson(result.user); });
 };
 
