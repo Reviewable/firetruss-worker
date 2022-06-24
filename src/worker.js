@@ -188,6 +188,10 @@ export default class Fireworker {
     if (k >= 0) fireworkers[k] = null;
   }
 
+  enableFirebaseLogging({value}) {
+    firebase.database.enableLogging(value);
+  }
+
   ping() {
     // Noop, placeholder for legacy Firetruss clients.
   }

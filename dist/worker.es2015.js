@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '2.2.0';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -194,6 +194,12 @@ Fireworker.prototype.destroy = function destroy () {
   this._messages = [];
   var k = fireworkers.indexOf(this);
   if (k >= 0) { fireworkers[k] = null; }
+};
+
+Fireworker.prototype.enableFirebaseLogging = function enableFirebaseLogging (ref) {
+    var value = ref.value;
+
+  firebase.database.enableLogging(value);
 };
 
 Fireworker.prototype.ping = function ping () {
