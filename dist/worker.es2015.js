@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '2.3.0';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -148,12 +148,33 @@ Branch.prototype._diffRecursively = function _diffRecursively (oldValue, newValu
 var Fireworker = function Fireworker(port) {
   this._port = port;
   this._lastWriteSerial = 0;
+  this._app = undefined;
+  this._cachedAuth = undefined;
+  this._cachedDatabase = undefined;
   this._lastJsonUser = undefined;
   this._configError = undefined;
   this._callbacks = {};
   this._messages = [];
   this._flushMessageQueue = this._flushMessageQueue.bind(this);
   port.onmessage = this._receive.bind(this);
+};
+
+var prototypeAccessors$1 = { _auth: { configurable: true },_database: { configurable: true } };
+
+prototypeAccessors$1._auth.get = function () {
+  if (this._cachedAuth) { return this._cachedAuth; }
+  if (!this._app) { throw new Error('Must provide Firebase configuration data first'); }
+  return this._cachedAuth = this._app.auth();
+};
+
+prototypeAccessors$1._database.get = function () {
+  if (this._cachedDatabase) { return this._cachedDatabase; }
+  if (!this._app) { throw new Error('Must provide Firebase configuration data first'); }
+  this._cachedDatabase = this._app.database();
+  if (Fireworker._databaseWrapperCallback) {
+    this._cachedDatabase = Fireworker._databaseWrapperCallback(this._cachedDatabase);
+  }
+  return this._cachedDatabase;
 };
 
 Fireworker.prototype.init = function init (ref) {
@@ -207,9 +228,8 @@ Fireworker.prototype.ping = function ping () {
 };
 
 Fireworker.prototype.bounceConnection = function bounceConnection () {
-  if (!this._app) { throw new Error('Must provide Firebase configuration data first'); }
-  this._app.database().goOffline();
-  this._app.database().goOnline();
+  this._database.goOffline();
+  this._database.goOnline();
 };
 
 Fireworker.prototype._receive = function _receive (event) {
@@ -270,14 +290,14 @@ Fireworker.prototype.authWithCustomToken = function authWithCustomToken (ref) {
     var url = ref.url;
     var authToken = ref.authToken;
 
-  return this._app.auth().signInWithCustomToken(authToken)
+  return this._auth.signInWithCustomToken(authToken)
     .then(function (result) { return userToJson(result.user); });
 };
 
 Fireworker.prototype.authAnonymously = function authAnonymously (ref) {
     var url = ref.url;
 
-  return this._app.auth().signInAnonymously()
+  return this._auth.signInAnonymously()
     .then(function (result) { return userToJson(result.user); });
 };
 
@@ -285,10 +305,10 @@ Fireworker.prototype.unauth = function unauth (ref) {
     var this$1 = this;
     var url = ref.url;
 
-  return this._app.auth().signOut().catch(function (e) {
+  return this._auth.signOut().catch(function (e) {
     // We can ignore the error if the user is signed out anyway, but make sure to notify all
     // authCallbacks otherwise we end up in a bogus state!
-    if (this$1._app.auth().currentUser === null) {
+    if (this$1._auth.currentUser === null) {
       for (var callbackId in this$1._callbacks) {
         if (!this$1._callbacks.hasOwnProperty(callbackId)) { continue; }
         var callback = this$1._callbacks[callbackId];
@@ -306,7 +326,7 @@ Fireworker.prototype.onAuth = function onAuth (ref) {
 
   var authCallback = this._callbacks[callbackId] = this._onAuthCallback.bind(this, callbackId);
   authCallback.auth = true;
-  authCallback.cancel = this._app.auth().onIdTokenChanged(authCallback);
+  authCallback.cancel = this._auth.onIdTokenChanged(authCallback);
 };
 
 Fireworker.prototype._onAuthCallback = function _onAuthCallback (callbackId, user) {
@@ -508,7 +528,7 @@ Fireworker.prototype.onDisconnect = function onDisconnect (ref) {
 Fireworker.prototype._createRef = function _createRef (url, spec) {
   if (!this._app) { throw new Error('Must provide Firebase configuration data first'); }
   try {
-    var ref = this._app.database().refFromURL(url);
+    var ref = this._database.refFromURL(url);
     if (spec) {
       switch (spec.by) {
         case '$key': ref = ref.orderByKey(); break;
@@ -540,8 +560,21 @@ Fireworker.expose = function expose (fn, name) {
   Fireworker._exposed[name] = fn;
 };
 
+Fireworker.setDatabaseWrapperCallback = function setDatabaseWrapperCallback (fn) {
+  if (Fireworker._databaseWrapperCallback) {
+    throw new Error("Database wrapper callback already set");
+  }
+  if (Fireworker._firstMessageReceived) {
+    throw new Error('Too late to set database wrapper callback, worker in use');
+  }
+  Fireworker._databaseWrapperCallback = fn;
+};
+
+Object.defineProperties( Fireworker.prototype, prototypeAccessors$1 );
+
 Fireworker._exposed = {};
 Fireworker._firstMessageReceived = false;
+Fireworker._databaseWrapperCallback = undefined;
 
 function errorToJson(error) {
   var json = {name: error.name, message: error.message};

@@ -143,12 +143,31 @@ export default class Fireworker {
   constructor(port) {
     this._port = port;
     this._lastWriteSerial = 0;
+    this._app = undefined;
+    this._cachedAuth = undefined;
+    this._cachedDatabase = undefined;
     this._lastJsonUser = undefined;
     this._configError = undefined;
     this._callbacks = {};
     this._messages = [];
     this._flushMessageQueue = this._flushMessageQueue.bind(this);
     port.onmessage = this._receive.bind(this);
+  }
+
+  get _auth() {
+    if (this._cachedAuth) return this._cachedAuth;
+    if (!this._app) throw new Error('Must provide Firebase configuration data first');
+    return this._cachedAuth = this._app.auth();
+  }
+
+  get _database() {
+    if (this._cachedDatabase) return this._cachedDatabase;
+    if (!this._app) throw new Error('Must provide Firebase configuration data first');
+    this._cachedDatabase = this._app.database();
+    if (Fireworker._databaseWrapperCallback) {
+      this._cachedDatabase = Fireworker._databaseWrapperCallback(this._cachedDatabase);
+    }
+    return this._cachedDatabase;
   }
 
   init({storage, config}) {
@@ -197,9 +216,8 @@ export default class Fireworker {
   }
 
   bounceConnection() {
-    if (!this._app) throw new Error('Must provide Firebase configuration data first');
-    this._app.database().goOffline();
-    this._app.database().goOnline();
+    this._database.goOffline();
+    this._database.goOnline();
   }
 
   _receive(event) {
@@ -248,20 +266,20 @@ export default class Fireworker {
   }
 
   authWithCustomToken({url, authToken}) {
-    return this._app.auth().signInWithCustomToken(authToken)
+    return this._auth.signInWithCustomToken(authToken)
       .then(result => userToJson(result.user));
   }
 
   authAnonymously({url}) {
-    return this._app.auth().signInAnonymously()
+    return this._auth.signInAnonymously()
       .then(result => userToJson(result.user));
   }
 
   unauth({url}) {
-    return this._app.auth().signOut().catch(e => {
+    return this._auth.signOut().catch(e => {
       // We can ignore the error if the user is signed out anyway, but make sure to notify all
       // authCallbacks otherwise we end up in a bogus state!
-      if (this._app.auth().currentUser === null) {
+      if (this._auth.currentUser === null) {
         for (const callbackId in this._callbacks) {
           if (!this._callbacks.hasOwnProperty(callbackId)) continue;
           const callback = this._callbacks[callbackId];
@@ -276,7 +294,7 @@ export default class Fireworker {
   onAuth({url, callbackId}) {
     const authCallback = this._callbacks[callbackId] = this._onAuthCallback.bind(this, callbackId);
     authCallback.auth = true;
-    authCallback.cancel = this._app.auth().onIdTokenChanged(authCallback);
+    authCallback.cancel = this._auth.onIdTokenChanged(authCallback);
   }
 
   _onAuthCallback(callbackId, user) {
@@ -443,7 +461,7 @@ export default class Fireworker {
   _createRef(url, spec) {
     if (!this._app) throw new Error('Must provide Firebase configuration data first');
     try {
-      let ref = this._app.database().refFromURL(url);
+      let ref = this._database.refFromURL(url);
       if (spec) {
         switch (spec.by) {
           case '$key': ref = ref.orderByKey(); break;
@@ -474,10 +492,21 @@ export default class Fireworker {
     }
     Fireworker._exposed[name] = fn;
   }
+
+  static setDatabaseWrapperCallback(fn) {
+    if (Fireworker._databaseWrapperCallback) {
+      throw new Error(`Database wrapper callback already set`);
+    }
+    if (Fireworker._firstMessageReceived) {
+      throw new Error('Too late to set database wrapper callback, worker in use');
+    }
+    Fireworker._databaseWrapperCallback = fn;
+  }
 }
 
 Fireworker._exposed = {};
 Fireworker._firstMessageReceived = false;
+Fireworker._databaseWrapperCallback = undefined;
 
 function errorToJson(error) {
   const json = {name: error.name, message: error.message};
