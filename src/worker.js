@@ -147,7 +147,7 @@ export default class Fireworker {
     this._cachedAuth = undefined;
     this._cachedDatabase = undefined;
     this._lastJsonUser = undefined;
-    this._configError = undefined;
+    this._configError = Fireworker._staticConfigError;
     this._callbacks = {};
     this._messages = [];
     this._flushMessageQueue = this._flushMessageQueue.bind(this);
@@ -163,9 +163,10 @@ export default class Fireworker {
   get _database() {
     if (this._cachedDatabase) return this._cachedDatabase;
     if (!this._app) throw new Error('Must provide Firebase configuration data first');
-    this._cachedDatabase = this._app.database();
     if (Fireworker._databaseWrapperCallback) {
-      this._cachedDatabase = Fireworker._databaseWrapperCallback(this._cachedDatabase);
+      this._cachedDatabase = Fireworker._databaseWrapperCallback(this._app.database());
+    } else {
+      this._cachedDatabase = this._app.database();
     }
     return this._cachedDatabase;
   }
@@ -180,7 +181,7 @@ export default class Fireworker {
         this._app = apps[config.databaseURL];
         this._app.database();
         this._app.auth();
-        this._configError = undefined;
+        this._configError = Fireworker._staticConfigError;
       } catch (e) {
         this._configError = e;
         throw e;
@@ -483,30 +484,43 @@ export default class Fireworker {
 
   static expose(fn, name) {
     name = name || fn.name;
-    if (!name) throw new Error('Cannot expose a function with no name: ' + fn);
+    if (!name) {
+      Fireworker._signalStaticConfigError(
+        new Error(`Cannot expose a function with no name: ${fn}`));
+    }
     if (Fireworker._exposed.hasOwnProperty(name)) {
-      throw new Error(`Function ${name}() already exposed`);
+      Fireworker._signalStaticConfigError(new Error(`Function ${name}() already exposed`));
     }
     if (Fireworker._firstMessageReceived) {
-      throw new Error('Too late to expose function, worker in use');
+      Fireworker._signalStaticConfigError(new Error('Too late to expose function, worker in use'));
     }
     Fireworker._exposed[name] = fn;
   }
 
   static setDatabaseWrapperCallback(fn) {
     if (Fireworker._databaseWrapperCallback) {
-      throw new Error(`Database wrapper callback already set`);
+      Fireworker._signalStaticConfigError(new Error('Database wrapper callback already set'));
     }
     if (Fireworker._firstMessageReceived) {
-      throw new Error('Too late to set database wrapper callback, worker in use');
+      Fireworker._signalStaticConfigError(
+        new Error('Too late to set database wrapper callback, worker in use'));
     }
     Fireworker._databaseWrapperCallback = fn;
+  }
+
+  static _signalStaticConfigError(error) {
+    if (!Fireworker._staticConfigError) Fireworker._staticConfigError = error;
+    for (const fireworker of fireworkers) {
+      if (fireworker && !fireworker._configError) fireworker._configError = error;
+    }
+    throw error;
   }
 }
 
 Fireworker._exposed = {};
 Fireworker._firstMessageReceived = false;
 Fireworker._databaseWrapperCallback = undefined;
+Fireworker._staticConfigError = undefined;
 
 function errorToJson(error) {
   const json = {name: error.name, message: error.message};
