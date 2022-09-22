@@ -9,7 +9,7 @@
   var fireworkers = [];
   var apps = {};
   // This version is filled in by the build, don't reformat the line.
-  var VERSION = 'dev';
+  var VERSION = '2.4.1';
 
 
   var LocalStorage = function LocalStorage() {
@@ -197,7 +197,7 @@
         this._app = apps[config.databaseURL];
         this._app.database();
         this._app.auth();
-        this._configError = undefined;
+        this._configError = Fireworker._staticConfigError;
       } catch (e) {
         this._configError = e;
         throw e;
@@ -583,6 +583,11 @@
 
   Fireworker._signalStaticConfigError = function _signalStaticConfigError (error) {
     if (!Fireworker._staticConfigError) { Fireworker._staticConfigError = error; }
+    for (var i = 0, list = fireworkers; i < list.length; i += 1) {
+      var fireworker = list[i];
+
+        if (fireworker && !fireworker._configError) { fireworker._configError = error; }
+    }
     throw error;
   };
 
