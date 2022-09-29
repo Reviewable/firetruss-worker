@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '2.4.2';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -536,11 +536,11 @@ Fireworker.prototype._createRef = function _createRef (url, spec) {
         case '$value': ref = ref.orderByValue(); break;
         default: ref = ref.orderByChild(spec.by); break;
       }
-      if (spec.at) { ref = ref.equalTo(spec.at); }
-      else if (spec.from) { ref = ref.startAt(spec.from); }
-      else if (spec.to) { ref = ref.endAt(spec.to); }
-      if (spec.first) { ref = ref.limitToFirst(spec.first); }
-      else if (spec.last) { ref = ref.limitToLast(spec.last); }
+      if (spec.at !== undefined) { ref = ref.equalTo(spec.at); }
+      else if (spec.from !== undefined) { ref = ref.startAt(spec.from); }
+      else if (spec.to !== undefined) { ref = ref.endAt(spec.to); }
+      if (spec.first !== undefined) { ref = ref.limitToFirst(spec.first); }
+      else if (spec.last !== undefined) { ref = ref.limitToLast(spec.last); }
     }
     return ref;
   } catch (e) {
