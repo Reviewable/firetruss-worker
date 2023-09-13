@@ -1,6 +1,6 @@
 {
   "name": "firetruss-worker",
-  "version": "2.4.3",
+  "version": "2.5.0",
   "description": "Web worker component for pkaminski/firetruss",
   "scripts": {
     "setup": "rm -rf bower_components; rm -rf node_modules; npm install; bower install;",
@@ -47,7 +47,7 @@
     "testdouble": "3"
   },
   "peerDependencies": {
-    "firebase": "5.x || 6.x || 7.x || 8.x || 9.x"
+    "firebase": "5.x || 6.x || 7.x || 8.x || 9.x || 10.x"
   },
   "ava": {
     "files": [
