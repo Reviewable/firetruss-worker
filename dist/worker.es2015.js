@@ -3,7 +3,7 @@
 var fireworkers = [];
 var apps = {};
 // This version is filled in by the build, don't reformat the line.
-var VERSION = '2.4.3';
+var VERSION = 'dev';
 
 
 var LocalStorage = function LocalStorage() {
@@ -185,10 +185,16 @@ Fireworker.prototype.init = function init (ref) {
   if (storage) { self.localStorage.init(storage); }
   if (config) {
     try {
-      if (!apps[config.databaseURL]) {
-        apps[config.databaseURL] = firebase.initializeApp(config, config.databaseURL);
-      }
       this._app = apps[config.databaseURL];
+      if (!this._app) {
+        this._app = apps[config.databaseURL] = firebase.initializeApp(config, config.databaseURL);
+        // If the API key looks invalid then assume that we're running against Cinderbase rather
+        // than Firebase and override the configuration appropriately.
+        if (config.apiKey && config.apiKey.length < 20) {
+          this._app.database().INTERNAL.forceWebSockets();
+          this._app.auth().useEmulator(config.databaseURL, {disableWarnings: true});
+        }
+      }
       this._app.database();
       this._app.auth();
       this._configError = Fireworker._staticConfigError;
