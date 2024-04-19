@@ -1,6 +1,6 @@
 {
   "name": "firetruss-worker",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Web worker component for pkaminski/firetruss",
   "scripts": {
     "setup": "rm -rf bower_components; rm -rf node_modules; npm install; bower install;",
