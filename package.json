@@ -3,8 +3,7 @@
   "version": "2.6.1",
   "description": "Web worker component for pkaminski/firetruss",
   "scripts": {
-    "setup": "rm -rf bower_components; rm -rf node_modules; npm install; bower install;",
-    "test": "node node_modules/ava/cli.js --watch"
+    "setup": "rm -rf node_modules; npm install;"
   },
   "repository": {
     "type": "git",
@@ -27,23 +26,21 @@
     "@babel/core": "^7.11.0",
     "@babel/preset-env": "^7.11.0",
     "@babel/register": "^7.10.5",
-    "@rollup/plugin-buble": "^0.21.3",
-    "@rollup/plugin-commonjs": "^14.0.0",
-    "@rollup/plugin-node-resolve": "^8.4.0",
-    "ava": "3",
+    "@rollup/plugin-commonjs": "25.x",
+    "@rollup/plugin-node-resolve": "15.x",
     "compose-source-map": "^1.0.0",
     "grunt": "^1.0.0",
     "grunt-contrib-clean": "2",
     "grunt-contrib-uglify": "5",
     "grunt-contrib-watch": "^1.0.0",
-    "grunt-eslint": "23",
+    "grunt-eslint": "24.x",
     "grunt-exec": "^3.0.0",
     "grunt-git": "^1.0.1",
     "grunt-release": "reviewable/grunt-release#master",
-    "grunt-rollup": "11",
+    "grunt-rollup": "12.x",
     "grunt-text-replace": "^0.4.0",
     "load-grunt-tasks": "5",
-    "rollup": "^2.23.0",
+    "rollup": "4.x",
     "testdouble": "3"
   },
   "peerDependencies": {

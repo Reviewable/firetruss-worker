@@ -1,7 +1,5 @@
 /* eslint-env node */
-'use strict';
 
-const buble = require('@rollup/plugin-buble');
 const nodeResolve = require('@rollup/plugin-node-resolve').nodeResolve;
 const commonjs = require('@rollup/plugin-commonjs');
 
@@ -45,11 +43,6 @@ module.exports = function(grunt) {
         },
         plugins: [
           commonjs(),
-          buble({
-            transforms: {
-              dangerousForOf: true
-            }
-          }),
           nodeResolve({
             resolveOnly: ['bogus']  // an empty array argument gets ignored
           })
@@ -104,7 +97,6 @@ module.exports = function(grunt) {
 
     release: {
       options: {
-        additionalFiles: ['bower.json'],
         afterBump: ['replace --release=<%= version %>'],
         beforeRelease: ['default'],
         afterRelease: ['exec:reset']
