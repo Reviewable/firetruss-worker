@@ -113,7 +113,7 @@ class Branch {
       let replace = true;
       const keysToReplace = [];
       for (const childKey in newValue) {
-        if (!newValue.hasOwnProperty(childKey)) continue;
+        if (!Object.hasOwn(newValue, childKey)) continue;
         const replaceChild = this._diffRecursively(
           oldValue[childKey], newValue[childKey], segments.concat(childKey), updates);
         if (replaceChild) {
@@ -124,7 +124,7 @@ class Branch {
       }
       if (replace) return true;
       for (const childKey in oldValue) {
-        if (!oldValue.hasOwnProperty(childKey) || newValue.hasOwnProperty(childKey)) continue;
+        if (!Object.hasOwn(oldValue, childKey) || Object.hasOwn(newValue, childKey)) continue;
         updates[segments.concat(childKey).join('/')] = null;
         delete oldValue[childKey];
       }
@@ -288,7 +288,7 @@ export default class Fireworker {
       // authCallbacks otherwise we end up in a bogus state!
       if (this._auth.currentUser === null) {
         for (const callbackId in this._callbacks) {
-          if (!this._callbacks.hasOwnProperty(callbackId)) continue;
+          if (!Object.hasOwn(this._callbacks, callbackId)) continue;
           const callback = this._callbacks[callbackId];
           if (callback.auth) callback(null);
         }
@@ -345,7 +345,7 @@ export default class Fireworker {
       delete this._callbacks[callbackId];
     } else {
       for (const key of Object.keys(this._callbacks)) {
-        if (!this._callbacks.hasOwnProperty(key)) continue;
+        if (!Object.hasOwn(this._callbacks, key)) continue;
         const callback = this._callbacks[key];
         if (callback.listenerKey === listenerKey &&
             (!eventType || callback.eventType === eventType)) {
@@ -370,7 +370,7 @@ export default class Fireworker {
       }
       const updates = options.branch.diff(value, path);
       for (const childPath in updates) {
-        if (!updates.hasOwnProperty(childPath)) continue;
+        if (!Object.hasOwn(updates, childPath)) continue;
         this._send({
           msg: 'callback', id: callbackId,
           args: [null, {
@@ -409,7 +409,7 @@ export default class Fireworker {
       if (stale) value = oldValue;
       if (relativeUpdates) {
         for (const relativePath in relativeUpdates) {
-          if (!relativeUpdates.hasOwnProperty(relativePath)) continue;
+          if (!Object.hasOwn(relativeUpdates, relativePath)) continue;
           if (relativePath) {
             const segments = relativePath.split('/');
             if (value === undefined || value === null) value = {};
@@ -435,7 +435,7 @@ export default class Fireworker {
       const snapshots = [];
       const updates = branch.diff(normalizeFirebaseValue(result.snapshot.val()), transactionPath);
       for (const path in updates) {
-        if (!updates.hasOwnProperty(path)) continue;
+        if (!Object.hasOwn(updates, path)) continue;
         snapshots.push({
           path, value: updates[path], writeSerial: result.writeSerial || this._lastWriteSerial
         });
@@ -494,7 +494,7 @@ export default class Fireworker {
       Fireworker._signalStaticConfigError(
         new Error(`Cannot expose a function with no name: ${fn}`));
     }
-    if (Fireworker._exposed.hasOwnProperty(name)) {
+    if (Object.hasOwn(Fireworker._exposed, name)) {
       Fireworker._signalStaticConfigError(new Error(`Function ${name}() already exposed`));
     }
     if (Fireworker._firstMessageReceived) {
@@ -549,7 +549,7 @@ function normalizeFirebaseValue(value) {
   }
   if (value instanceof Object) {
     for (const key in value) {
-      if (value.hasOwnProperty(key)) value[key] = normalizeFirebaseValue(value[key]);
+      if (Object.hasOwn(value, key)) value[key] = normalizeFirebaseValue(value[key]);
     }
   }
   return value;
@@ -574,11 +574,11 @@ function areEqualNormalFirebaseValues(a, b) {
   if (a === null || b === null) return false;
   if (!(typeof a === 'object' && typeof b === 'object')) return false;
   for (const key in a) {
-    if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
+    if (!Object.hasOwn(a, key) || !Object.hasOwn(b, key)) return false;
     if (!areEqualNormalFirebaseValues(a[key], b[key])) return false;
   }
   for (const key in b) {
-    if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
+    if (!Object.hasOwn(a, key) || !Object.hasOwn(b, key)) return false;
   }
   return true;
 }
@@ -589,11 +589,11 @@ function areEqualValues(a, b) {
   if (a === null || b === null || a === undefined || b === undefined) return false;
   if (!(typeof a === 'object' && typeof b === 'object')) return false;
   for (const key in a) {
-    if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
+    if (!Object.hasOwn(a, key) || !Object.hasOwn(b, key)) return false;
     if (!areEqualValues(a[key], b[key])) return false;
   }
   for (const key in b) {
-    if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) return false;
+    if (!Object.hasOwn(a, key) || !Object.hasOwn(b, key)) return false;
   }
   if (Array.isArray(a) || Array.isArray(b)) {
     if (!Array.isArray(a) || !Array.isArray(b)) return false;
@@ -606,12 +606,12 @@ function areEqualValues(a, b) {
 }
 
 function acceptConnections() {
-  if (typeof onconnect !== 'undefined') {
+  if (typeof onconnect === 'undefined') {
+    fireworkers.push(new Fireworker(self));
+  } else {
     self.onconnect = function(event) {
       fireworkers.push(new Fireworker(event.ports[0]));
     };
-  } else {
-    fireworkers.push(new Fireworker(self));
   }
   self.localStorage.flushPending();
 }
