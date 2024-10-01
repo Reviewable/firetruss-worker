@@ -8,9 +8,9 @@ export default [
     languageOptions: {
       globals: {
         ...globals.worker,
-        ...globals.es2015,
+        ...globals.es2019,
       },
-      ecmaVersion: 2015
+      ecmaVersion: 2019
     }
   },
   {
