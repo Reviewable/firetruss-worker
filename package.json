@@ -65,5 +65,6 @@
     ]
   },
   "main": "dist/worker.umd.js",
-  "module": "dist/worker.es2015.js"
+  "module": "dist/worker.es2015.js",
+  "packageManager": "yarn@1.22.22"
 }
