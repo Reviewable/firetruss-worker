@@ -260,7 +260,19 @@ export default class Fireworker {
   }
 
   _flushMessageQueue() {
-    this._port.postMessage(this._messages);
+    try {
+      this._port.postMessage(this._messages);
+    } catch {
+      for (const message of this._messages) {
+        try {
+          this._port.postMessage([message]);
+        } catch (e) {
+          const error = {name: e.name, message: e.message};
+          if (message.error) error.cause = `${message.error.name}: ${message.error.message}`;
+          this._port.postMessage([{msg: 'crash', error}]);
+        }
+      }
+    }
     this._messages = [];
   }
 
@@ -532,7 +544,10 @@ function errorToJson(error) {
   const json = {name: error.name, message: error.message};
   const propertyNames = Object.getOwnPropertyNames(error);
   for (const propertyName of propertyNames) {
-    json[propertyName] = error[propertyName];
+    const type = typeof error[propertyName];
+    if (type === 'string' || type === 'number' || type === 'boolean') {
+      json[propertyName] = error[propertyName];
+    }
   }
   return json;
 }
