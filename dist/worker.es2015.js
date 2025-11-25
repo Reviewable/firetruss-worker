@@ -3,7 +3,7 @@
 const fireworkers = [];
 const apps = {};
 // This version is filled in by the build, don't reformat the line.
-const VERSION = '3.1.1';
+const VERSION = 'dev';
 
 
 class LocalStorage {
@@ -269,6 +269,13 @@ class Fireworker {
         } catch (e) {
           const error = {name: e.name, message: e.message};
           if (message.error) error.cause = `${message.error.name}: ${message.error.message}`;
+          if (message.result) {
+            try {
+              error.cause = `result: ${JSON.stringify(message.result)}`;
+            } catch (e2) {
+              error.cause = `result JSON error: ${e2.name}: ${e2.message}`;
+            }
+          }
           this._port.postMessage([{msg: 'crash', error}]);
         }
       }
