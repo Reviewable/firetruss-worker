@@ -462,9 +462,9 @@ export default class Fireworker {
       return {committed: !stale, snapshots};
     }, error => {
       if (error.message === 'set' || error.message === 'disconnect') {
-        return ref.once('value').then(snapshot => {
-          return {committed: false, snapshots: [snapshot], writeSerial: this._lastWriteSerial};
-        });
+        return ref.once('value').then(snapshot => ({committed: false, snapshots: [{
+          path: transactionPath, value: snapshot.val(), writeSerial: this._lastWriteSerial
+        }]}));
       }
       error.committedValue = committedValue;
       return Promise.reject(error);

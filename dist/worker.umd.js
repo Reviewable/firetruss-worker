@@ -9,7 +9,7 @@
   const fireworkers = [];
   const apps = {};
   // This version is filled in by the build, don't reformat the line.
-  const VERSION = '3.1.2';
+  const VERSION = 'dev';
 
 
   class LocalStorage {
@@ -468,9 +468,9 @@
         return {committed: !stale, snapshots};
       }, error => {
         if (error.message === 'set' || error.message === 'disconnect') {
-          return ref.once('value').then(snapshot => {
-            return {committed: false, snapshots: [snapshot], writeSerial: this._lastWriteSerial};
-          });
+          return ref.once('value').then(snapshot => ({committed: false, snapshots: [{
+            path: transactionPath, value: snapshot.val(), writeSerial: this._lastWriteSerial
+          }]}));
         }
         error.committedValue = committedValue;
         return Promise.reject(error);
