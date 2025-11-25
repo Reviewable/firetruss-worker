@@ -9,7 +9,7 @@
   const fireworkers = [];
   const apps = {};
   // This version is filled in by the build, don't reformat the line.
-  const VERSION = 'dev';
+  const VERSION = '3.1.2';
 
 
   class LocalStorage {
