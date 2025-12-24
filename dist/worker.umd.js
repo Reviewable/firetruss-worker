@@ -157,6 +157,7 @@
       this._callbacks = {};
       this._messages = [];
       this._flushMessageQueue = this._flushMessageQueue.bind(this);
+      this._logging = false;
       port.onmessage = this._receive.bind(this);
     }
 
@@ -221,6 +222,7 @@
     }
 
     enableFirebaseLogging({value}) {
+      this._logging = value;
       firebase.database.enableLogging(value);
     }
 
@@ -241,6 +243,7 @@
     _receiveMessage(message) {
       let promise;
       try {
+        if (this._logging) console.log('wrkr_recv:', message);
         const fn = this[message.msg];
         if (typeof fn !== 'function') throw new Error('Unknown message: ' + message.msg);
         if (message.writeSerial) {
@@ -263,10 +266,12 @@
     _send(message) {
       if (!this._messages.length) Promise.resolve().then(this._flushMessageQueue);
       this._messages.push(message);
+      if (this._logging) console.log('wrkr_send:', message);
     }
 
     _flushMessageQueue() {
       try {
+        if (this._logging) console.log('wrkr_flush:', this._messages.length, 'messages');
         this._port.postMessage(this._messages);
       } catch {
         for (const message of this._messages) {
