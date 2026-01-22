@@ -178,7 +178,14 @@
       return this._cachedDatabase;
     }
 
-    init({storage, config}) {
+    init({storage, config, lockName}) {
+      console.log('init', lockName);
+      if (lockName) {
+        self.navigator.locks.request(lockName, () => {
+          console.log('destroy', lockName);
+          this._destroy();
+        });
+      }
       if (storage) self.localStorage.init(storage);
       if (config) {
         try {
@@ -209,7 +216,7 @@
       };
     }
 
-    destroy() {
+    _destroy() {
       for (const key in this._callbacks) {
         const callback = this._callbacks[key];
         if (callback.cancel) callback.cancel();
