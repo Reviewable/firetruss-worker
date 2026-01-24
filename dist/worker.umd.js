@@ -11,6 +11,10 @@
   // This version is filled in by the build, don't reformat the line.
   const VERSION = 'dev';
 
+  const random = crypto.getRandomValues(new Uint32Array(1))[0];
+  const livenessLockName = `truss_worker_liveness_lock_${Date.now()}.${random}`;
+  navigator.locks.request(livenessLockName, () => new Promise(() => {/* reject on crash */}));
+
 
   class LocalStorage {
     constructor() {
@@ -206,7 +210,8 @@
       return {
         exposedFunctionNames: Object.keys(Fireworker._exposed),
         version: VERSION,
-        firebaseSdkVersion: firebase.SDK_VERSION
+        firebaseSdkVersion: firebase.SDK_VERSION,
+        livenessLockName
       };
     }
 
