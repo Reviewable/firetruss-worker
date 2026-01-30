@@ -7,7 +7,12 @@ const VERSION = 'dev';
 
 const random = crypto.getRandomValues(new Uint32Array(1))[0];
 const livenessLockName = `truss_worker_liveness_lock_${Date.now()}.${random}`;
-navigator.locks.request(livenessLockName, () => new Promise(() => {/* reject on crash */}));
+const lockReady = new Promise((resolve, reject) => {
+  navigator.locks.request(livenessLockName, () => {
+    resolve();
+    return new Promise(() => {/* release lock only on crash */});
+  }).catch(reject);
+});
 
 
 class LocalStorage {
@@ -176,7 +181,7 @@ class Fireworker {
     return this._cachedDatabase;
   }
 
-  init({storage, config, lockName}) {
+  async init({storage, config, lockName}) {
     if (lockName) self.navigator.locks.request(lockName, () => {this._destroy();});
     if (storage) self.localStorage.init(storage);
     if (config) {
@@ -201,6 +206,7 @@ class Fireworker {
     } else if (this._configError) {
       throw this._configError;
     }
+    await lockReady;
     return {
       exposedFunctionNames: Object.keys(Fireworker._exposed),
       version: VERSION,
