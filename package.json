@@ -1,6 +1,6 @@
 {
   "name": "firetruss-worker",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "description": "Web worker component for Reviewable/firetruss",
   "scripts": {
     "lint": "eslint src/*.js",
