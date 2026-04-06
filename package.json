@@ -3,9 +3,12 @@
   "version": "4.1.1",
   "description": "Web worker component for Reviewable/firetruss",
   "scripts": {
+    "update": "yarn up -R '*' && yarn dedupe --strategy highest",
+    "latest": "yarn npm-check-updates -i -m --packageManager yarn --install never && yarn install",
     "lint": "eslint src/*.js",
     "build": "yarn run grunt",
-    "finalize": "yarn run grunt replace default --release=\"$(jq -r .version package.json)\""
+    "finalize": "yarn run grunt replace default --release=\"$(jq -r .version package.json)\"",
+    "upgrade": "reviewable-upgrade"
   },
   "repository": "https://github.com/Reviewable/firetruss-worker",
   "keywords": [
@@ -38,6 +41,7 @@
     "grunt-rollup": "12.x",
     "grunt-text-replace": "^0.4.0",
     "load-grunt-tasks": "5",
+    "npm-check-updates": "^20.0.0",
     "reviewable-configs": "Reviewable/reviewable-configs",
     "rollup": "4.x"
   },
@@ -51,5 +55,5 @@
   },
   "main": "dist/worker.umd.js",
   "module": "dist/worker.es2015.js",
-  "packageManager": "yarn@1.22.22"
+  "packageManager": "yarn@4.13.0"
 }
