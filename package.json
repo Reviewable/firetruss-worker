@@ -15,8 +15,7 @@
     "firebase",
     "vuejs",
     "model",
-    "worker",
-    "angular"
+    "worker"
   ],
   "author": "Piotr Kaminski",
   "license": "MIT",
