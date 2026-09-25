@@ -156,6 +156,12 @@ class Fireworker {
     this._cachedAuth = undefined;
     this._cachedDatabase = undefined;
     this._lastJsonUser = undefined;
+    // Serializes the results of the `userToJson` calls made for auth requests and auth change
+    // callbacks.  `getIdTokenResult()` isn't guaranteed to settle in invocation order, so without
+    // this a callback could be sent after the request it preceded, or two callbacks could be
+    // transposed;  the client relies on the order to tell which auth change belongs to which
+    // request.  Only the output is serialized, so the token lookups still run concurrently.
+    this._authResultQueue = Promise.resolve();
     this._configError = Fireworker._staticConfigError;
     this._callbacks = {};
     this._messages = [];
@@ -310,12 +316,12 @@ class Fireworker {
 
   authWithCustomToken({url, authToken}) {
     return this._auth.signInWithCustomToken(authToken)
-      .then(result => userToJson(result.user));
+      .then(result => this._userToJsonInOrder(result.user));
   }
 
   authAnonymously({url}) {
     return this._auth.signInAnonymously()
-      .then(result => userToJson(result.user));
+      .then(result => this._userToJsonInOrder(result.user));
   }
 
   unauth({url}) {
@@ -331,7 +337,13 @@ class Fireworker {
       } else {
         return Promise.reject(e);
       }
-    });
+    }).then(() =>
+      // Wait for the auth changes reported up to this point to be sent, so that this response can't
+      // overtake them.  The SDK notifies its listeners before settling the call that caused the
+      // change, so the queue already holds this logout's own notification by now;  anything
+      // enqueued later belongs to whatever happens next and isn't waited on.
+      this._authResultQueue.catch(() => undefined)
+    );
   }
 
   onAuth({url, callbackId}) {
@@ -341,11 +353,30 @@ class Fireworker {
   }
 
   _onAuthCallback(callbackId, user) {
-    userToJson(user).then(jsonUser => {
+    this._userToJsonInOrder(user).then(jsonUser => {
       if (areEqualValues(this._lastJsonUser, jsonUser)) return;
       this._lastJsonUser = jsonUser;
       this._send({msg: 'callback', id: callbackId, args: [jsonUser]});
     });
+  }
+
+  // Converts a user to JSON, resolving in call order even though the underlying token lookups may
+  // not.  The lookup is started eagerly so that concurrent calls still overlap;  only the results
+  // are lined up again, which is what `_onAuthCallback`'s dedup check and the client's ordering
+  // rely on.  A failed lookup rejects its own caller without wedging the calls behind it.
+  //
+  // The lookup's outcome is captured as it settles rather than left to be awaited when its turn
+  // comes up:  a lookup that fails while an earlier one is still pending would otherwise sit
+  // rejected with nothing attached, which the platform reports as an unhandled rejection even
+  // though its caller does receive the error.
+  _userToJsonInOrder(user) {
+    const settled = userToJson(user).then(
+      jsonUser => () => jsonUser,
+      error => () => {throw error;}
+    );
+    const result = this._authResultQueue.then(() => settled).then(replay => replay());
+    this._authResultQueue = result.catch(() => undefined);
+    return result;
   }
 
   set({url, value}) {

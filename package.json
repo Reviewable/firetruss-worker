@@ -1,11 +1,12 @@
 {
   "name": "firetruss-worker",
-  "version": "4.1.1",
+  "version": "4.1.2",
   "description": "Web worker component for Reviewable/firetruss",
   "scripts": {
     "update": "yarn up -R '*' && yarn dedupe --strategy highest",
     "latest": "yarn npm-check-updates -i -m --packageManager yarn --install never && yarn install",
     "lint": "yarn grunt eslint",
+    "test": "BABEL_DISABLE_CACHE=1 node --require @babel/register --test \"src/**/*.test.js\"",
     "build": "yarn run grunt",
     "finalize": "yarn run grunt replace default --release=\"$(jq -r .version package.json)\"",
     "upgrade": "reviewable-upgrade"
