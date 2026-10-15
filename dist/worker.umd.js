@@ -407,14 +407,26 @@
       snapshotCallback.eventType = eventType;
       snapshotCallback.cancel = options.cancel;
       const cancelCallback = this._onCancelCallback.bind(this, callbackId);
-      this._createRef(url, spec).on(eventType, snapshotCallback, cancelCallback);
+      try {
+        // Kept so that `off` removes the listener through the very ref that added it.  Building a new
+        // one from the URL can fail where this can't:  a database wrapper that encrypts paths needs
+        // its key to do that, and another client sharing this worker may have released it already.
+        snapshotCallback.ref = this._createRef(url, spec);
+        snapshotCallback.ref.on(eventType, snapshotCallback, cancelCallback);
+      } catch (e) {
+        // Nothing was registered, and the client treats the failure as a cancellation, so forget the
+        // callback;  removing it later would only fail the same way.  It's registered beforehand
+        // since Firebase may invoke it synchronously from within `on`.
+        delete this._callbacks[callbackId];
+        throw e;
+      }
     }
 
-    off({listenerKey, url, spec, eventType, callbackId}) {
-      let snapshotCallback;
+    off({listenerKey, eventType, callbackId}) {
+      const callbacks = [];
       if (callbackId) {
         // Callback IDs will not be reused across on() calls, so it's safe to just delete it.
-        snapshotCallback = this._callbacks[callbackId];
+        if (this._callbacks[callbackId]) callbacks.push(this._callbacks[callbackId]);
         delete this._callbacks[callbackId];
       } else {
         for (const key of Object.keys(this._callbacks)) {
@@ -422,11 +434,18 @@
           const callback = this._callbacks[key];
           if (callback.listenerKey === listenerKey &&
               (!eventType || callback.eventType === eventType)) {
+            callbacks.push(callback);
             delete this._callbacks[key];
           }
         }
       }
-      this._createRef(url, spec).off(eventType, snapshotCallback);
+      // Only this client's own listeners are removed.  A callback that's already gone was cancelled
+      // by Firebase, which removed its listener too, so there's nothing left to do for it;  passing
+      // no callback to `off` would instead remove every listener at the location, including those
+      // of other clients sharing this worker.
+      for (const callback of callbacks) {
+        if (callback.ref) callback.ref.off(callback.eventType, callback);
+      }
     }
 
     _onSnapshotCallback(callbackId, options, snapshot) {
