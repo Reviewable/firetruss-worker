@@ -197,3 +197,83 @@ test('a logout response waits for the auth changes that preceded it', async () =
     'the logout response overtook an auth change');
   assert.deepEqual(log(), ['callback:old', 'callback:null']);
 });
+
+// Drives a `Fireworker`'s listeners against a stub database that records every ref it hands out
+// and every listener call made on them.  `failNewRefs` makes building a ref throw, the way a
+// database wrapper that encrypts paths does once its key has been released.
+function createListenerWorker() {
+  const calls = [];
+  let failNewRefs = false;
+  const makeRef = url => ({
+    url,
+    on: (eventType, callback) => {calls.push({method: 'on', url, eventType, callback});},
+    off: (eventType, callback) => {calls.push({method: 'off', url, eventType, callback});}
+  });
+  const worker = new Fireworker({postMessage: () => undefined});
+  worker._app = {};
+  worker._cachedDatabase = {
+    refFromURL: url => {
+      if (failNewRefs) throw new Error('Encryption not set up');
+      return makeRef(url);
+    }
+  };
+  const listen = (callbackId, url, listenerKey = url) =>
+    worker.on({listenerKey, url, eventType: 'value', callbackId});
+  return {
+    worker, calls, listen,
+    failNewRefs: () => {failNewRefs = true;},
+    offCalls: () => calls.filter(call => call.method === 'off')
+  };
+}
+
+test('off removes a listener through the ref that added it', () => {
+  const {worker, calls, listen, failNewRefs, offCalls} = createListenerWorker();
+  const url = 'https://example.firebaseio.com/records/person';
+  listen(1, url);
+  failNewRefs();
+
+  worker.off({listenerKey: url, url, eventType: 'value', callbackId: 1});
+
+  assert.equal(offCalls().length, 1);
+  assert.equal(offCalls()[0].callback, calls[0].callback, 'removed some other callback');
+});
+
+test('off for a callback that is already gone leaves other listeners alone', () => {
+  const {worker, listen, offCalls} = createListenerWorker();
+  const url = 'https://example.firebaseio.com/records/person';
+  listen(1, url, 'mine');
+  listen(2, url, 'theirs');
+  worker.off({listenerKey: 'mine', url, eventType: 'value', callbackId: 1});
+
+  // Firebase cancelled the listener already, or the client sends a duplicate off.
+  worker.off({listenerKey: 'mine', url, eventType: 'value', callbackId: 1});
+
+  assert.equal(offCalls().length, 1, 'removed listeners without naming a callback');
+});
+
+test('off by listener key removes each of its listeners and only those', () => {
+  const {worker, calls, listen, failNewRefs, offCalls} = createListenerWorker();
+  const url = 'https://example.firebaseio.com/records';
+  listen(1, url + '/a', 'mine');
+  listen(2, url + '/b', 'mine');
+  listen(3, url + '/a', 'theirs');
+  failNewRefs();
+
+  worker.off({listenerKey: 'mine', url});
+
+  assert.deepEqual(
+    offCalls().map(call => call.callback),
+    [calls[0].callback, calls[1].callback]);
+});
+
+test('a listener that failed to register is not removed later', () => {
+  const {worker, listen, failNewRefs, offCalls} = createListenerWorker();
+  const url = 'https://example.firebaseio.com/records/person';
+  failNewRefs();
+  assert.throws(() => listen(1, url), /Encryption not set up/);
+
+  worker.off({listenerKey: url, url});
+  worker.off({listenerKey: url, url, eventType: 'value', callbackId: 1});
+
+  assert.deepEqual(offCalls(), []);
+});
